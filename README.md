@@ -70,25 +70,46 @@ by Promtail and queried live.
 
 ![Grafana logs explore](docs/screenshots/10-grafana-logs-explore.png)
 
+**Dashboard — hosts** — the Angular dashboard's health panel and hosts
+table, loading real data from a running `platform-api`.
+
+![Dashboard hosts tab](docs/screenshots/11-dashboard-hosts.png)
+
+**Dashboard — virtual machines** — VM power states with a one-click
+power toggle calling `POST /api/v1/vms/{id}/power`.
+
+![Dashboard VMs tab](docs/screenshots/12-dashboard-vms.png)
+
+**Dashboard — datastores** — capacity usage bars per datastore.
+
+![Dashboard datastores tab](docs/screenshots/13-dashboard-datastores.png)
+
+**Dashboard — dark mode** — the dashboard's theme follows the browser's
+color scheme.
+
+![Dashboard dark mode](docs/screenshots/14-dashboard-dark-mode.png)
+
 ## Quick Start
 
-Requires Java 21, Maven, and Docker.
+Requires Java 21, Maven, Node 20+, and Docker.
 
 ```bash
-# Run the test suite
+# Run the backend test suite
 cd backend && mvn test
 
-# Run platform-api + the simulated vCenter (vcsim) together
+# Run platform-api + the simulated vCenter (vcsim) + the dashboard together
 docker compose up -d --build
 
 curl http://localhost:8080/api/v1/hosts
 curl http://localhost:8080/actuator/health
+open http://localhost:4200   # Angular dashboard
 ```
 
 `platform-api` listens on `http://localhost:8080`:
 
 | Endpoint | Description |
 |---|---|
+| `GET /api/v1/summary` | Dashboard rollup: inventory counts, VM power-state breakdown, datastore capacity |
 | `GET /api/v1/hosts` | List ESXi hosts in the simulated estate |
 | `GET /api/v1/vms` | List virtual machines |
 | `POST /api/v1/vms/{id}/power` | Change a VM's power state |
@@ -145,6 +166,31 @@ inventory size, request rate/latency, 5xx error rate, JVM heap, and live
 logs — see [`observability/README.md`](observability/README.md) for the
 full breakdown and alert rules.
 
+### Dashboard
+
+```bash
+docker compose up -d --build platform-api vcsim frontend
+```
+
+A standalone Angular app in `frontend/` showing live inventory and
+platform health: a summary panel with a health badge and stat tiles, and
+tabs for hosts, VMs (with a power-on/off toggle), and datastores (with
+capacity usage bars). Polls `platform-api` every 15 seconds. For local
+development, `cd frontend && npm start` runs `ng serve` against a
+`platform-api` on `localhost:8080` via `proxy.conf.json` — see
+[`frontend/README.md`](frontend/README.md).
+
+### Kubernetes
+
+```bash
+helm install platform-api helm/platform-api
+```
+
+A Helm chart deploying `platform-api` to Kubernetes: a 2-replica
+Deployment, a ClusterIP Service, and startup/liveness/readiness probes
+wired to Spring Boot Actuator's health probe groups — see
+[`helm/README.md`](helm/README.md).
+
 ## Architecture
 
 ```
@@ -197,9 +243,28 @@ scripts/            End-to-end integration test scripts
 cd backend && mvn test
 ```
 
-37 unit and integration tests cover the inventory domain model, the
-in-memory inventory service (including inventory sync and its
-Micrometer inventory-size gauges), and every REST/Actuator endpoint.
+41 unit and integration tests cover the inventory domain model, the
+in-memory inventory service (including inventory sync, the summary
+rollup, and the Micrometer inventory-size gauges), and every
+REST/Actuator endpoint.
+
+```bash
+cd frontend && npm test -- --watch=false --browsers=ChromeHeadless
+```
+
+29 component and service specs cover the API client, the summary panel's
+loading/success/error states, and the hosts/VMs/datastores tables
+(including the VM power toggle). With `platform-api` and `ng serve`
+running (see [`frontend/README.md`](frontend/README.md)):
+
+```bash
+cd frontend && npm run e2e
+```
+
+A Playwright smoke suite confirms the dashboard renders real inventory
+and health from a running `platform-api`, that switching tabs loads VMs
+and datastores, and that the power toggle actually calls the API and
+updates the row.
 
 ```bash
 pwsh -NoProfile -File infra/powershell/Run-Tests.ps1
@@ -219,6 +284,17 @@ validation rules against a mocked provider, and exercises the Ansible
 idempotency, variable overrides, and rejected invalid input).
 
 ```bash
+helm/platform-api/tests/run-tests.sh
+```
+
+Lints the Helm chart (`helm lint --strict`) and asserts its rendered
+output under default values and several overrides — no cluster needed.
+`helm/platform-api/tests/cluster-smoke-test.sh` additionally installs
+the chart to whatever cluster the current kubeconfig points at, confirms
+both replicas reach `Ready`, curls the API through the real Service, and
+uninstalls — not run in CI since it needs a real cluster.
+
+```bash
 ./scripts/integration-test-observability.sh
 ```
 
@@ -230,13 +306,11 @@ Prometheus/Grafana HTTP APIs. Tears the stack down on exit either way.
 
 ## Status
 
-`platform-api` (inventory domain, REST API, Actuator/Prometheus metrics,
-containerized with `vcsim`), the `HybridPlatformSync` PowerCLI module
-(pulling live inventory out of `vcsim` and syncing it into `platform-api`),
-the Terraform/Ansible infrastructure-as-code layer, and the Prometheus /
-Alertmanager / Grafana / Loki / Promtail observability stack are
-implemented and tested. The Kubernetes deployment and the Angular
-dashboard are in progress. See [PROGRESS.md](PROGRESS.md) for the full
+Every layer described above — `platform-api`, the `HybridPlatformSync`
+PowerCLI module, the Terraform/Ansible infrastructure-as-code layer, the
+Prometheus/Alertmanager/Grafana/Loki/Promtail observability stack, the
+Helm chart, and the Angular dashboard — is implemented, tested, and
+wired together. See [PROGRESS.md](PROGRESS.md) for the full
 phase-by-phase build plan and history.
 
 ## License
