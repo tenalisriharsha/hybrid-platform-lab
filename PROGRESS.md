@@ -8,7 +8,7 @@ A self-service VM platform for development and validation environments across VM
 
 ## Phased Build Plan (6 phases, one per session)
 
-- [ ] **Phase 1 - FastAPI self-service API**: POST/GET/DELETE /environments, template and size validation, owner and expiry fields, SQLite or in-memory store, /metrics for Prometheus, pytest and ruff.
+- [x] **Phase 1 - FastAPI self-service API**: POST/GET/DELETE /environments, template and size validation, owner and expiry fields, SQLite or in-memory store, /metrics for Prometheus, pytest and ruff.
 - [ ] **Phase 2 - PowerCLI module and vSphere backend**: New-LabVM, Get-VMInventoryReport, Invoke-SnapshotPolicy (-WhatIf/-Confirm, protected VMs refused), Pester against vcsim in vCenter mode and standalone-ESXi mode, API backend calling the module through pwsh.
 - [ ] **Phase 3 - Terraform**: modules/proxmox-vm (bpg/proxmox) and modules/azure-vm (azurerm), dev and validation environment folders, terraform test with mock_provider, API backends that render tfvars and run terraform plan only.
 - [ ] **Phase 4 - Ansible and Windows baseline**: linux-baseline role run against a Docker container with ansible-lint and an idempotence check; PowerShell Windows Server baseline script with Pester.
@@ -17,4 +17,21 @@ A self-service VM platform for development and validation environments across VM
 
 ## Resume point
 
-Start at **Phase 1**. This repository was rebuilt from the brief above after an earlier build used the wrong design (a Java API, Angular dashboard and Helm chart that were not requested); that content was removed. Do not reintroduce any Java, Maven, Angular or Helm. The stack is Python (FastAPI), PowerShell/PowerCLI, Terraform, Ansible and GitHub Actions only. Add a .gitignore first (node_modules, .venv, __pycache__, .terraform, .ansible, .pytest_cache) and never commit dependency or cache directories.
+**Phase 1 is done.** Start session 2 at **Phase 2** (PowerCLI module and vSphere backend).
+
+This repository was rebuilt from the brief above after an earlier build used the wrong design (a Java API, Angular dashboard and Helm chart that were not requested); that content was removed. Do not reintroduce any Java, Maven, Angular or Helm. The stack is Python (FastAPI), PowerShell/PowerCLI, Terraform, Ansible and GitHub Actions only. Add a .gitignore first (node_modules, .venv, __pycache__, .terraform, .ansible, .pytest_cache) and never commit dependency or cache directories.
+
+### What exists after Phase 1
+
+- `api/app/` - a FastAPI service: `catalog.py` (the approved templates/sizes catalog, the only source of truth for what can be requested), `models.py` (`EnvironmentCreateRequest`/`Environment` Pydantic models, owner validated as an email, `ttl_hours` 1-168h default 24h, server-computed `expiry`), `store.py` (SQLite-backed `EnvironmentStore`, in-memory by default, file path via `HYBRID_LAB_DB`), `metrics.py` (a per-app-instance `CollectorRegistry` so tests can create multiple app instances without duplicate-metric errors), `backends/` (a `ProvisioningBackend` ABC plus a `SimulatedBackend` registered for `vsphere`/`proxmox`/`azure` - replace these one at a time in later phases without touching the router), `routers/environments.py` (the actual routes), `main.py` (app factory + metrics middleware + `/metrics` + `/healthz`).
+- Routes: `POST/GET/DELETE /environments`, `GET /environments/{id}`, `GET /catalog`, `GET /metrics`, `GET /healthz`. DELETE marks an environment `deleted` rather than erasing it (audit trail); it's excluded from the default list unless `include_deleted=true`.
+- `api/tests/` - 22 pytest tests covering validation (unknown template/size, bad owner, bad name, ttl bounds), CRUD, filtering, delete semantics (404/409), the catalog route, and the metrics endpoint/gauge. All passing. `ruff check .` is clean (`api/pyproject.toml` has the ruff config).
+- Python 3.14 venv at `api/.venv` (gitignored); `api/requirements.txt` pins the versions actually installed (fastapi 0.162.0, pydantic 2.14.1, prometheus-client 0.26.0, pytest 9.1.1, ruff 0.17.2).
+- `docs/screenshots/01` through `03` are Swagger UI captures (overview, a live POST executed through "Try it out", a live GET showing seeded data); `04`-`06` are terminal captures of the real pytest run, `ruff check .`, and `curl .../metrics`. These are good through Phase 1; re-capture once the API surface grows in later phases (e.g. once backends do real work, the `detail`/`backend_ref` values will look different).
+
+### Design notes to carry forward
+
+- **Backend abstraction is already in place.** `app/backends/__init__.py` has a `_BACKENDS` dict keyed by `"vsphere"/"proxmox"/"azure"`. Phase 2 should replace the `"vsphere"` entry with a real backend whose `provision()` shells out to `pwsh` and calls `New-LabVM` from the Phase 2 PowerCLI module, and whose `deprovision()` removes the VM it created. Phase 3 does the same for `"proxmox"`/`"azure"` with Terraform (render tfvars, `terraform plan` only, never apply). The router and store do not need to change.
+- `ProvisioningError` (in `app/backends/base.py`) maps to a 502 in the create route - reuse it for real backend failures (e.g. pwsh exits non-zero, terraform plan fails).
+- The catalog (`app/catalog.py`) is the single source of truth for template → backend mapping and size → spec. When Phase 2/3 need real template names (e.g. an actual vSphere template VM name, or a Proxmox/Azure image reference), extend the `TEMPLATES` dict rather than hardcoding them elsewhere.
+- Metrics use a registry scoped to the FastAPI app instance (`app.state.metrics.registry`), not `prometheus_client`'s global default registry - keep doing this so future tests that spin up multiple app instances (e.g. one per backend integration test) don't collide.
