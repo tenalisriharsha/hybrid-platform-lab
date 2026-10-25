@@ -99,6 +99,18 @@ Or run the full end-to-end check (boots both containers, syncs, verifies, tears 
 ./scripts/integration-test-sync.sh
 ```
 
+### Infrastructure as code
+
+`infra/terraform/modules/vsphere-estate` describes the lab's vSphere
+estate — datacenter, compute cluster, ESXi hosts, and NAS datastores — as
+a Terraform module validated with `terraform validate` and a
+`terraform test` suite running against a fully mocked provider (no
+network calls, no real credentials). `infra/ansible` renders
+environment-specific configuration for `platform-api` and
+`HybridPlatformSync` from one set of variables, tested with
+`ansible-lint` and a real exercise of the role against `localhost`. See
+each directory's README for details.
+
 ## Architecture
 
 ```
@@ -161,15 +173,25 @@ pwsh -NoProfile -File infra/powershell/Run-Tests.ps1
 Runs PSScriptAnalyzer and the Pester suite for the `HybridPlatformSync`
 module (datastore/host/VM conversion, JSON export, and the sync flow).
 
+```bash
+cd infra/terraform/modules/vsphere-estate && terraform init && terraform test
+cd infra/ansible && ./tests/run-tests.sh
+```
+
+Validates the Terraform module's planned topology and variable
+validation rules against a mocked provider, and exercises the Ansible
+`platform_config` role end to end (lint, check-mode dry run, a real run,
+idempotency, variable overrides, and rejected invalid input).
+
 ## Status
 
 `platform-api` (inventory domain, REST API, Actuator/Prometheus metrics,
-containerized with `vcsim`) and the `HybridPlatformSync` PowerCLI module
-(pulling live inventory out of `vcsim` and syncing it into `platform-api`)
-are implemented and tested. Infrastructure-as-code, the observability
-stack, Kubernetes deployment, and the Angular dashboard are in progress.
-See [PROGRESS.md](PROGRESS.md) for the full phase-by-phase build plan and
-history.
+containerized with `vcsim`), the `HybridPlatformSync` PowerCLI module
+(pulling live inventory out of `vcsim` and syncing it into `platform-api`),
+and the Terraform/Ansible infrastructure-as-code layer are implemented
+and tested. The observability stack, Kubernetes deployment, and the
+Angular dashboard are in progress. See [PROGRESS.md](PROGRESS.md) for the
+full phase-by-phase build plan and history.
 
 ## License
 

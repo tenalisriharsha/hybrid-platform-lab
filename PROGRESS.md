@@ -109,13 +109,33 @@ sized to fit one session.
     `Sync-PlatformInventory` against them, and asserts the API's inventory
     reflects vcsim's live (simulated) estate — verified passing locally
 
-- [ ] **Phase 3 — Infrastructure as Code**
-  - Terraform modules in `infra/terraform/` describing platform resources
-    (vsphere-provider resources against `vcsim` where possible, mocked
-    elsewhere); validated with `terraform fmt`/`validate` and
-    `terraform test` using `mock_provider` (no real cloud calls)
-  - Ansible playbooks/roles in `infra/ansible/` for platform configuration
-    tasks, clean `ansible-lint`, and check-mode based assertions as tests
+- [x] **Phase 3 — Infrastructure as Code**
+  - `infra/terraform/modules/vsphere-estate`: a Terraform module against
+    the `vmware/vsphere` provider describing the lab's vSphere estate —
+    datacenter, compute cluster, ESXi hosts, NAS datastores. Capacity
+    numbers (CPU/memory) and VMs are deliberately left out: those are
+    properties of real hardware/workloads, observed live through
+    `HybridPlatformSync`, not declared as code. Host passwords are passed
+    via a separate `host_passwords` map so `hosts` can stay a
+    non-sensitive `for_each` key
+  - `infra/terraform/environments/lab`: a root module wiring the module
+    for this lab's topology, plus a `terraform.tfvars.example` with
+    placeholder-only credentials
+  - 6 `terraform test` cases against a `mock_provider` (no network call,
+    no real credentials) covering the expected plan topology and every
+    variable validation rule (empty/duplicate hosts, duplicate
+    datastores, a host missing its password); `terraform fmt -check` and
+    `terraform validate` both clean on the module and the lab environment
+  - `infra/ansible/roles/platform_config`: renders a `platform-api` Spring
+    Boot config overlay and a `HybridPlatformSync` connection-settings
+    JSON from one set of variables, with an `assert` task rejecting
+    out-of-range input before anything is written
+  - `infra/ansible/tests/run-tests.sh`: `ansible-lint` (clean at the
+    `production` profile) plus a real exercise of the role — check-mode
+    dry run, a real run, an idempotency check, variable overrides, and a
+    rejected invalid input — all against `localhost`, no real hosts
+  - CI (`.github/workflows/ci.yml`) gained `terraform` and `ansible` jobs
+    alongside the existing `backend` job
 
 - [ ] **Phase 4 — Observability Stack**
   - Prometheus scrape config targeting `platform-api`; Alertmanager rules
@@ -139,21 +159,32 @@ sized to fit one session.
 
 ## Resume Point
 
-**Next session starts here:** Phase 3 — Infrastructure as Code.
+**Next session starts here:** Phase 4 — Observability Stack.
 
-Start with Terraform modules under `infra/terraform/` describing platform
-resources — model them against the `vsphere` provider pointed at `vcsim`
-where that's realistic (hosts/VMs/datastores already have real analogues
-there), and mock elsewhere. Validate with `terraform fmt -check`,
-`terraform validate`, and `terraform test` using `mock_provider` (no real
-cloud/vCenter calls — `vcsim` plan-level usage, if attempted, should stay
-read-only and bounded). Then write Ansible playbooks/roles under
-`infra/ansible/` for platform configuration tasks (e.g. shaping
-`platform-api`'s `application.yml`, or an `infra/powershell`-adjacent
-config step), keep `ansible-lint` clean, and use check-mode runs as the
-test layer (no real hosts to configure against, so assert on the
-diff/changed-resources output of `--check --diff`). Do not run
-`terraform apply`/`destroy` or any real AWS/cloud credentials — only dummy
-credentials exist in this environment.
+Build on `observability/` (currently just a README placeholder):
+
+- A Prometheus scrape config targeting `platform-api`'s
+  `/actuator/prometheus` endpoint (already exposed since Phase 1)
+- Alertmanager rules for health/error conditions (e.g. `platform-api` down,
+  elevated 5xx rate)
+- `promtool check config` / `promtool check rules` passing on both
+- Grafana dashboards (provisioned JSON, not click-ops) visualizing
+  inventory size (hosts/VMs/datastores counts, from the `/api/v1/*`
+  endpoints or derived metrics) and request metrics (rate, latency, error
+  rate from Micrometer)
+- Loki + Promtail aggregating `platform-api`'s container logs
+- A `docker-compose` profile (e.g. `docker compose --profile observability
+  up`) wiring prometheus/alertmanager/grafana/loki/promtail together with
+  `platform-api`, building on the images already pulled
+  (`prom/prometheus`, `prom/alertmanager`, `grafana/grafana`,
+  `grafana/loki`, `grafana/promtail`)
+- A real (not just config-syntax) end-to-end check in the style of
+  `scripts/integration-test-sync.sh`: boot the observability profile,
+  confirm Prometheus is actually scraping `platform-api` (query
+  `/api/v1/targets` or `/api/v1/query`), and confirm Grafana's
+  provisioned dashboards/datasources loaded
+
+Keep using Docker for all of this (already running, allowed per the
+environment rules) and stay well under the ~2 GB image-size guidance.
 
 STATUS: IN_PROGRESS
