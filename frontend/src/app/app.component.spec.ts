@@ -1,6 +1,6 @@
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
-import { TestBed } from '@angular/core/testing';
+import { TestBed, discardPeriodicTasks, fakeAsync, tick } from '@angular/core/testing';
 import { AppComponent } from './app.component';
 
 describe('AppComponent', () => {
@@ -22,6 +22,12 @@ describe('AppComponent', () => {
   function createAndRender() {
     const fixture = TestBed.createComponent(AppComponent);
     fixture.detectChanges();
+
+    // HostsTableComponent subscribes directly, so its request fires
+    // synchronously; SummaryPanelComponent polls via timer(0, ...), which is
+    // scheduled as a macrotask and only fires once the fakeAsync clock ticks.
+    httpMock.expectOne('/api/v1/hosts').flush([]);
+    tick();
     httpMock.expectOne('/api/v1/summary').flush({
       hostCount: 2,
       vmCount: 3,
@@ -33,12 +39,11 @@ describe('AppComponent', () => {
       totalDatastoreFreeGb: 4300,
     });
     httpMock.expectOne('/actuator/health').flush({ status: 'UP' });
-    httpMock.expectOne('/api/v1/hosts').flush([]);
     fixture.detectChanges();
     return fixture;
   }
 
-  it('creates the app and titles it Hybrid Platform Lab', () => {
+  it('creates the app and titles it Hybrid Platform Lab', fakeAsync(() => {
     const fixture = createAndRender();
     const app = fixture.componentInstance;
     expect(app).toBeTruthy();
@@ -46,9 +51,10 @@ describe('AppComponent', () => {
 
     const compiled = fixture.nativeElement as HTMLElement;
     expect(compiled.querySelector('h1')?.textContent).toContain('Hybrid Platform Lab');
-  });
+    discardPeriodicTasks();
+  }));
 
-  it('defaults to the hosts tab and switches tabs on click', () => {
+  it('defaults to the hosts tab and switches tabs on click', fakeAsync(() => {
     const fixture = createAndRender();
     const compiled = fixture.nativeElement as HTMLElement;
 
@@ -63,5 +69,6 @@ describe('AppComponent', () => {
     httpMock.expectOne('/api/v1/vms').flush([]);
 
     expect(fixture.componentInstance.activeTab).toBe('vms');
-  });
+    discardPeriodicTasks();
+  }));
 });
