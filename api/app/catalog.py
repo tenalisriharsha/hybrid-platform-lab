@@ -16,11 +16,13 @@ TEMPLATES: dict[str, dict[str, str]] = {
         "backend": "vsphere",
         "os": "linux",
         "description": "Ubuntu 22.04 LTS, cloned from a vSphere template VM.",
+        "source_vm": "tpl-ubuntu-2204",
     },
     "windows-server-2022-vsphere": {
         "backend": "vsphere",
         "os": "windows",
         "description": "Windows Server 2022, cloned from a vSphere template VM.",
+        "source_vm": "tpl-windows-server-2022",
     },
     "ubuntu-22.04-proxmox": {
         "backend": "proxmox",

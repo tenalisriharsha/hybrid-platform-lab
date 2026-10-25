@@ -23,7 +23,11 @@ def create_environment(request: EnvironmentCreateRequest, http_request: Request)
     backend = get_backend(environment.backend)
     try:
         result = backend.provision(
-            name=environment.name, template=environment.template, size=environment.size
+            name=environment.name,
+            template=environment.template,
+            size=environment.size,
+            owner=environment.owner,
+            expiry=environment.expiry,
         )
     except ProvisioningError as exc:
         environment.status = EnvironmentStatus.FAILED
@@ -73,7 +77,10 @@ def delete_environment(environment_id: str, http_request: Request) -> None:
 
     backend = get_backend(environment.backend)
     if environment.backend_ref is not None:
-        backend.deprovision(backend_ref=environment.backend_ref)
+        try:
+            backend.deprovision(backend_ref=environment.backend_ref)
+        except ProvisioningError as exc:
+            raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
 
     environment.status = EnvironmentStatus.DELETED
     store.update(environment)

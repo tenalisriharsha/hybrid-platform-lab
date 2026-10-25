@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+from datetime import datetime
 
 
 class ProvisioningError(RuntimeError):
@@ -18,7 +19,9 @@ class ProvisioningBackend(ABC):
     """A backend turns an Environment request into (or out of) infrastructure."""
 
     @abstractmethod
-    def provision(self, *, name: str, template: str, size: str) -> ProvisionResult: ...
+    def provision(
+        self, *, name: str, template: str, size: str, owner: str, expiry: datetime
+    ) -> ProvisionResult: ...
 
     @abstractmethod
     def deprovision(self, *, backend_ref: str) -> None: ...

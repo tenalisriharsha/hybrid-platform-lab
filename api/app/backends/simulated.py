@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime
 from uuid import uuid4
 
 from app.backends.base import ProvisioningBackend, ProvisionResult
@@ -16,7 +17,9 @@ class SimulatedBackend(ProvisioningBackend):
     def __init__(self, kind: str) -> None:
         self._kind = kind
 
-    def provision(self, *, name: str, template: str, size: str) -> ProvisionResult:
+    def provision(
+        self, *, name: str, template: str, size: str, owner: str, expiry: datetime
+    ) -> ProvisionResult:
         return ProvisionResult(
             backend_ref=f"sim-{self._kind}-{uuid4().hex[:12]}",
             detail=f"simulated {self._kind} backend; no real infrastructure was touched",
