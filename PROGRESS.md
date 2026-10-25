@@ -137,13 +137,41 @@ sized to fit one session.
   - CI (`.github/workflows/ci.yml`) gained `terraform` and `ansible` jobs
     alongside the existing `backend` job
 
-- [ ] **Phase 4 — Observability Stack**
-  - Prometheus scrape config targeting `platform-api`; Alertmanager rules
-    for health/error conditions; `promtool check` passing
-  - Grafana dashboards (provisioned JSON) visualizing inventory size and
-    request metrics
-  - Loki + Promtail aggregating `platform-api` logs
-  - `docker-compose` profile wiring the full observability stack end to end
+- [x] **Phase 4 — Observability Stack**
+  - `platform-api` gained three Micrometer gauges (`platform_inventory_hosts`,
+    `platform_inventory_vms`, `platform_inventory_datastores`) tracking the
+    live inventory size, plus percentile-histogram buckets enabled for
+    `http.server.requests` so p95 latency can be queried via
+    `histogram_quantile`. 2 new unit tests cover the gauges (37 backend
+    tests total)
+  - `observability/prometheus/`: scrape config targeting
+    `platform-api:8080/actuator/prometheus`, and 3 alert rules
+    (`PlatformApiDown`, `PlatformApiHighErrorRate`, `PlatformApiNoInventory`)
+    — `promtool check config`/`check rules` both clean (run via the pulled
+    `prom/prometheus` image, no local promtool binary needed)
+  - `observability/alertmanager/`: routing config with a no-op default
+    receiver (no real notification channel needed for a lab) —
+    `amtool check-config` clean
+  - `observability/grafana/`: auto-provisioned Prometheus + Loki
+    datasources and a "Hybrid Platform Lab — Overview" dashboard (inventory
+    size, request rate/p95 latency by endpoint, 5xx error rate, JVM heap,
+    live log panel) — nothing requires manual click-ops setup
+  - `observability/loki/` + `observability/promtail/`: single-binary Loki
+    with filesystem storage; Promtail discovers containers via Docker
+    service discovery (`docker_sd_configs` against the Docker socket) and
+    ships their logs to Loki, labeled by `compose_service`/`container`
+  - `docker-compose.yml` gained an `observability` Compose profile
+    (`docker compose --profile observability up`) wiring all five services
+    alongside `vcsim`/`platform-api`
+  - `scripts/integration-test-observability.sh`: boots the real profile,
+    confirms via the Prometheus HTTP API that `platform-api` is actually
+    being scraped (`up{job="platform-api"} == 1`) and the alert rules
+    loaded, confirms `platform_inventory_hosts` is queryable, confirms
+    Alertmanager is healthy, and confirms Grafana's datasources/dashboard
+    provisioned — verified passing locally, including a manual check that
+    Promtail-shipped `platform-api` logs are actually queryable in Loki
+  - CI (`.github/workflows/ci.yml`) gained an `observability` job running
+    the `promtool`/`amtool` config checks
 
 - [ ] **Phase 5 — Kubernetes & Frontend Dashboard**
   - Helm chart in `helm/` for `platform-api` (passing `helm lint` /
@@ -159,32 +187,45 @@ sized to fit one session.
 
 ## Resume Point
 
-**Next session starts here:** Phase 4 — Observability Stack.
+**Next session starts here:** Phase 5 — Kubernetes & Frontend Dashboard.
 
-Build on `observability/` (currently just a README placeholder):
+Build on `helm/` and `frontend/` (currently README placeholders):
 
-- A Prometheus scrape config targeting `platform-api`'s
-  `/actuator/prometheus` endpoint (already exposed since Phase 1)
-- Alertmanager rules for health/error conditions (e.g. `platform-api` down,
-  elevated 5xx rate)
-- `promtool check config` / `promtool check rules` passing on both
-- Grafana dashboards (provisioned JSON, not click-ops) visualizing
-  inventory size (hosts/VMs/datastores counts, from the `/api/v1/*`
-  endpoints or derived metrics) and request metrics (rate, latency, error
-  rate from Micrometer)
-- Loki + Promtail aggregating `platform-api`'s container logs
-- A `docker-compose` profile (e.g. `docker compose --profile observability
-  up`) wiring prometheus/alertmanager/grafana/loki/promtail together with
-  `platform-api`, building on the images already pulled
-  (`prom/prometheus`, `prom/alertmanager`, `grafana/grafana`,
-  `grafana/loki`, `grafana/promtail`)
-- A real (not just config-syntax) end-to-end check in the style of
-  `scripts/integration-test-sync.sh`: boot the observability profile,
-  confirm Prometheus is actually scraping `platform-api` (query
-  `/api/v1/targets` or `/api/v1/query`), and confirm Grafana's
-  provisioned dashboards/datasources loaded
+- A Helm chart in `helm/` for `platform-api`: Deployment, Service, and a
+  values file exposing image/replica/resource/env configuration. Must pass
+  `helm lint` and `helm template` cleanly; consider a `helm unittest` or
+  `helm template` + assertion-based test for key rendered fields (image
+  tag, port, env vars). Equivalent plain kubectl manifests alongside it
+  (or generated via `helm template > manifests/`) so the chart's output is
+  inspectable without a cluster.
+- Validate the chart actually deploys: `kubectl` + `kind`/`minikube` is
+  available in this environment, or at minimum exercise it with `helm
+  template` output applied to a local cluster if one is cheap to spin up
+  (check what's available before assuming — Docker Desktop's Kubernetes or
+  `minikube` via the `gcr.io/k8s-minikube/kicbase` image already pulled
+  may already be usable)
+- An Angular dashboard in `frontend/` consuming `platform-api`: an
+  inventory table (hosts/VMs/datastores, pulling from `GET /api/v1/hosts`
+  etc.), a health/status view (`GET /actuator/health`), and a metrics
+  summary (could reuse the inventory-size gauges or call `/actuator/
+  prometheus` and parse, or better, have `platform-api` expose a small
+  summary REST endpoint purpose-built for the dashboard rather than
+  parsing Prometheus text format client-side — worth deciding early)
+- Component tests for the Angular dashboard (e.g. Jasmine/Karma or the
+  modern Angular testing setup) and at least a smoke-level e2e check
+  (could be Playwright, consistent with how screenshots are captured for
+  this README) asserting the dashboard renders real data from a running
+  `platform-api`
+- Wire the dashboard into `docker-compose.yml` (its own service/profile,
+  or folded into the existing default services) so `docker compose up`
+  can serve it end to end alongside `platform-api`
+- Update CI (`.github/workflows/ci.yml`) with a `frontend` job (npm
+  install/build/test) and, if feasible without excessive CI time, a
+  `helm lint`/`helm template` job
 
-Keep using Docker for all of this (already running, allowed per the
-environment rules) and stay well under the ~2 GB image-size guidance.
+This is the last unimplemented functional phase — Phase 6 is hardening,
+final README/DAILY_REPORT, and the preview screenshot refresh. Budget
+Phase 5 time accordingly: get the Helm chart and dashboard both genuinely
+working and tested, since Phase 6 has no slack to build net-new features.
 
 STATUS: IN_PROGRESS

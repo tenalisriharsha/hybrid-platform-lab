@@ -36,7 +36,7 @@ domain, service, and REST/Actuator endpoints.
 ![Power state and error handling](docs/screenshots/03-power-state-and-errors.png)
 
 **Prometheus metrics** — per-endpoint request metrics exposed at
-`/actuator/prometheus`, ready for the observability stack in Phase 4.
+`/actuator/prometheus`, scraped by the observability stack below.
 
 ![Prometheus metrics](docs/screenshots/04-prometheus-metrics.png)
 
@@ -48,6 +48,27 @@ domain, service, and REST/Actuator endpoints.
 **Project layout** — the full scaffold for every track of the platform.
 
 ![Project layout](docs/screenshots/06-project-layout.png)
+
+**Grafana overview dashboard** — inventory size, request rate and p95
+latency by endpoint, 5xx error rate, JVM heap, and live `platform-api` logs,
+provisioned automatically (no click-ops).
+
+![Grafana overview dashboard](docs/screenshots/07-grafana-dashboard.png)
+
+**Prometheus targets** — `platform-api` being scraped live over
+`/actuator/prometheus`.
+
+![Prometheus targets](docs/screenshots/08-prometheus-targets.png)
+
+**Prometheus alert rules** — `PlatformApiDown`, `PlatformApiHighErrorRate`,
+and `PlatformApiNoInventory`, loaded and evaluating.
+
+![Prometheus alert rules](docs/screenshots/09-prometheus-alerts.png)
+
+**Loki logs via Grafana Explore** — `platform-api` container logs shipped
+by Promtail and queried live.
+
+![Grafana logs explore](docs/screenshots/10-grafana-logs-explore.png)
 
 ## Quick Start
 
@@ -111,6 +132,19 @@ environment-specific configuration for `platform-api` and
 `ansible-lint` and a real exercise of the role against `localhost`. See
 each directory's README for details.
 
+### Observability
+
+```bash
+docker compose --profile observability up -d --build
+```
+
+Starts `vcsim` + `platform-api` plus Prometheus, Alertmanager, Grafana,
+Loki, and Promtail. Grafana (`http://localhost:3000`, `admin`/`admin`)
+auto-provisions a Prometheus/Loki datasource pair and a dashboard showing
+inventory size, request rate/latency, 5xx error rate, JVM heap, and live
+logs — see [`observability/README.md`](observability/README.md) for the
+full breakdown and alert rules.
+
 ## Architecture
 
 ```
@@ -154,6 +188,7 @@ infra/powershell/   PowerCLI module syncing inventory from vcsim
 observability/      Prometheus, Alertmanager, Grafana, Loki, Promtail configs
 helm/               Helm chart for deploying platform-api to Kubernetes
 docs/screenshots/   Preview images
+scripts/            End-to-end integration test scripts
 ```
 
 ## Testing
@@ -162,9 +197,9 @@ docs/screenshots/   Preview images
 cd backend && mvn test
 ```
 
-35 unit and integration tests cover the inventory domain model, the
-in-memory inventory service (including inventory sync), and every
-REST/Actuator endpoint.
+37 unit and integration tests cover the inventory domain model, the
+in-memory inventory service (including inventory sync and its
+Micrometer inventory-size gauges), and every REST/Actuator endpoint.
 
 ```bash
 pwsh -NoProfile -File infra/powershell/Run-Tests.ps1
@@ -183,15 +218,26 @@ validation rules against a mocked provider, and exercises the Ansible
 `platform_config` role end to end (lint, check-mode dry run, a real run,
 idempotency, variable overrides, and rejected invalid input).
 
+```bash
+./scripts/integration-test-observability.sh
+```
+
+Boots the full observability Docker Compose profile, confirms Prometheus
+is actually scraping `platform-api` and has loaded its alert rules,
+confirms the inventory-size gauges are queryable, and confirms Grafana's
+provisioned datasources and dashboard loaded — against the real
+Prometheus/Grafana HTTP APIs. Tears the stack down on exit either way.
+
 ## Status
 
 `platform-api` (inventory domain, REST API, Actuator/Prometheus metrics,
 containerized with `vcsim`), the `HybridPlatformSync` PowerCLI module
 (pulling live inventory out of `vcsim` and syncing it into `platform-api`),
-and the Terraform/Ansible infrastructure-as-code layer are implemented
-and tested. The observability stack, Kubernetes deployment, and the
-Angular dashboard are in progress. See [PROGRESS.md](PROGRESS.md) for the
-full phase-by-phase build plan and history.
+the Terraform/Ansible infrastructure-as-code layer, and the Prometheus /
+Alertmanager / Grafana / Loki / Promtail observability stack are
+implemented and tested. The Kubernetes deployment and the Angular
+dashboard are in progress. See [PROGRESS.md](PROGRESS.md) for the full
+phase-by-phase build plan and history.
 
 ## License
 
