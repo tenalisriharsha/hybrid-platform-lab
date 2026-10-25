@@ -149,6 +149,46 @@ class InventoryServiceTest {
     }
 
     @Test
+    void summaryReflectsSeededInventory() {
+        InventorySummary summary = inventoryService.summary();
+
+        assertThat(summary.hostCount()).isEqualTo(2);
+        assertThat(summary.vmCount()).isEqualTo(3);
+        assertThat(summary.datastoreCount()).isEqualTo(2);
+        assertThat(summary.vmsPoweredOn()).isEqualTo(2);
+        assertThat(summary.vmsPoweredOff()).isEqualTo(1);
+        assertThat(summary.vmsSuspended()).isZero();
+        assertThat(summary.totalDatastoreCapacityGb()).isEqualTo(2048 + 4096);
+        assertThat(summary.totalDatastoreFreeGb()).isEqualTo(1200 + 3100);
+    }
+
+    @Test
+    void summaryTracksPowerStateChanges() {
+        inventoryService.setVmPowerState("vm-3", PowerState.POWERED_ON);
+
+        InventorySummary summary = inventoryService.summary();
+
+        assertThat(summary.vmsPoweredOn()).isEqualTo(3);
+        assertThat(summary.vmsPoweredOff()).isZero();
+    }
+
+    @Test
+    void summaryTracksSyncedEstate() {
+        Datastore datastore = new Datastore("ds-synced", "synced-ds", 1024, 512);
+        Host host = new Host("host-synced", "synced-host", "synced-cluster", 8, 16384, List.of(datastore.id()));
+        VirtualMachine vm = new VirtualMachine(
+                "vm-synced", "synced-vm", host.id(), PowerState.SUSPENDED, 2, 4096);
+
+        inventoryService.sync(List.of(host), List.of(vm), List.of(datastore));
+
+        InventorySummary summary = inventoryService.summary();
+        assertThat(summary.hostCount()).isEqualTo(1);
+        assertThat(summary.vmsSuspended()).isEqualTo(1);
+        assertThat(summary.totalDatastoreCapacityGb()).isEqualTo(1024);
+        assertThat(summary.totalDatastoreFreeGb()).isEqualTo(512);
+    }
+
+    @Test
     void inventorySizeGaugesTrackSyncedEstate() {
         Datastore datastore = new Datastore("ds-synced", "synced-ds", 1024, 512);
         Host host = new Host("host-synced", "synced-host", "synced-cluster", 8, 16384, List.of(datastore.id()));

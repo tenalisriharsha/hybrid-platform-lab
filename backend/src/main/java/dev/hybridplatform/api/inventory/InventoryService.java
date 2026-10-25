@@ -140,4 +140,33 @@ public class InventoryService {
 
         return new SyncResult(hosts.size(), vms.size(), datastores.size(), Instant.now());
     }
+
+    /**
+     * A dashboard-friendly rollup of the current inventory. Computed on
+     * demand from the live maps rather than tracked incrementally, since the
+     * inventory is small and this avoids having to keep counters in sync
+     * with every mutation path (power state changes, sync, add).
+     */
+    public InventorySummary summary() {
+        int poweredOn = 0;
+        int poweredOff = 0;
+        int suspended = 0;
+        for (VirtualMachine vm : vms.values()) {
+            switch (vm.powerState()) {
+                case POWERED_ON -> poweredOn++;
+                case POWERED_OFF -> poweredOff++;
+                case SUSPENDED -> suspended++;
+            }
+        }
+
+        long totalCapacity = 0;
+        long totalFree = 0;
+        for (Datastore datastore : datastores.values()) {
+            totalCapacity += datastore.capacityGb();
+            totalFree += datastore.freeGb();
+        }
+
+        return new InventorySummary(
+                hosts.size(), vms.size(), datastores.size(), poweredOn, poweredOff, suspended, totalCapacity, totalFree);
+    }
 }
