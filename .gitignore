@@ -3,6 +3,10 @@ node_modules/
 __pycache__/
 *.pyc
 .terraform/
+*.tfstate
+*.tfstate.*
+crash.log
+*.tfplan
 .ansible/
 .pytest_cache/
 .ruff_cache/

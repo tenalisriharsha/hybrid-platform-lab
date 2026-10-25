@@ -131,9 +131,11 @@ template and delegates to it:
   environment; falls back to a simulated backend otherwise, so the API stays
   usable without a real vCenter (or vcsim) on hand. See
   [`powercli/README.md`](powercli/README.md) for the module itself.
-- **Proxmox** and **Azure** - still a simulated placeholder; the real
-  Terraform-backed implementation (render `tfvars`, run `terraform plan`
-  only, never apply) is tracked in `PROGRESS.md` for a later phase.
+- **Proxmox** and **Azure** - renders a `tfvars` file from the request and
+  runs `terraform plan` against `terraform/environments/dev/{proxmox,azure}`
+  - **never `terraform apply`**. Active once the backend's required
+  `HYBRID_LAB_PROXMOX_*`/`HYBRID_LAB_AZURE_*` variables are set; falls back
+  to a simulated backend otherwise. See [Terraform](#terraform) below.
 
 ### The vSphere backend
 
@@ -167,6 +169,44 @@ process listing.
 | `HYBRID_LAB_VSPHERE_MODULE_PATH` | no | Path to the `HybridLab` module; defaults to the one in this repo. |
 | `HYBRID_LAB_VSPHERE_TEMPLATE_OVERRIDES` | no | JSON map of catalog template → actual source VM name, e.g. `{"ubuntu-22.04-vsphere":"DC0_H0_VM0"}` for pointing at a vcsim fixture VM instead of `catalog.py`'s placeholder name. |
 
+## Terraform
+
+`terraform/modules/proxmox-vm` (clones a VM from a Proxmox template, via the
+[`bpg/proxmox`](https://registry.terraform.io/providers/bpg/proxmox) provider)
+and `terraform/modules/azure-vm` (a resource group + network + Linux VM, via
+`azurerm`) are the two building blocks. Each has its own `terraform test`
+suite under a local `tests/` folder, run with [`mock_provider`](https://developer.hashicorp.com/terraform/language/tests/mocking)
+so it needs no real credentials:
+
+```bash
+cd terraform/modules/proxmox-vm   # or modules/azure-vm
+terraform init
+terraform fmt -check
+terraform validate
+terraform test
+```
+
+`terraform/environments/{dev,validation}/{proxmox,azure}` wire a module up
+with provider configuration. **dev** has no gate - it's what the API's
+Proxmox/Azure backends plan against. **validation** is stricter: an
+`approved` variable defaults to `false`, and a `terraform plan` simply
+refuses to proceed until it's explicitly set `true` - a small, enforced
+example of promotion gating that a self-service request can't bypass on its
+own. Both environment folders read their provider credentials entirely from
+environment variables (`PROXMOX_VE_*`, `ARM_*`) - never from a tfvars file -
+so nothing secret ever touches disk.
+
+| Environment variable | Required | Purpose |
+|---|---|---|
+| `HYBRID_LAB_PROXMOX_ENDPOINT` | yes | Proxmox API endpoint, e.g. `https://pve.example.com:8006`. Backend falls back to simulated when unset. |
+| `HYBRID_LAB_PROXMOX_API_TOKEN` | yes | API token (`user@realm!tokenid=secret`); translated to `PROXMOX_VE_API_TOKEN` for the provider, never written to a tfvars file. |
+| `HYBRID_LAB_PROXMOX_NODE` | yes | Proxmox node to place the cloned VM on. |
+| `HYBRID_LAB_PROXMOX_INSECURE` | no | Default `false`; set `true` to skip TLS verification (self-signed Proxmox certs). |
+| `HYBRID_LAB_PROXMOX_TEMPLATE_OVERRIDES` | no | JSON map of catalog template → actual template VMID, e.g. `{"ubuntu-22.04-proxmox":1234}`. |
+| `HYBRID_LAB_AZURE_SUBSCRIPTION_ID` / `_TENANT_ID` / `_CLIENT_ID` / `_CLIENT_SECRET` | yes | Service principal credentials; translated to the standard `ARM_*` names. Backend falls back to simulated when unset. |
+| `HYBRID_LAB_AZURE_LOCATION` | yes | Azure region, e.g. `eastus`. |
+| `HYBRID_LAB_AZURE_SSH_PUBLIC_KEY` | yes | SSH public key installed on provisioned Linux VMs. |
+
 ## Project layout
 
 ```
@@ -177,6 +217,9 @@ powercli/            HybridLab PowerCLI module (New-LabVM, Get-VMInventoryReport
   HybridLab/           module source (Public/Private cmdlets)
   scripts/             pwsh entry points the API's vSphere backend shells out to
   Tests/               Pester suite (run via scripts/run-pester-tests.sh)
+terraform/
+  modules/             proxmox-vm, azure-vm - reusable module building blocks, each with its own terraform test suite
+  environments/        dev/ (ungated) and validation/ (approval-gated) folders wiring the modules up with providers
 scripts/
   run-pester-tests.sh  starts vcsim (vCenter + ESXi modes) and runs the Pester suite
 docs/
@@ -188,11 +231,12 @@ DAILY_REPORT.md       Written once the project is complete
 ## Status
 
 The FastAPI self-service API (catalog validation, the environments CRUD
-surface, Prometheus metrics) and the vSphere path (the `HybridLab` PowerCLI
-module plus a real backend that drives it through `pwsh`) are built and
-tested. Terraform modules for Proxmox/Azure, Ansible/PowerShell baselines
-and the CI pipeline are still to come. See `PROGRESS.md` for the full phase
-plan and exactly what's done.
+surface, Prometheus metrics), the vSphere path (the `HybridLab` PowerCLI
+module plus a real backend that drives it through `pwsh`), and the
+Proxmox/Azure path (the `proxmox-vm`/`azure-vm` Terraform modules plus real
+backends that plan, never apply, against them) are built and tested.
+Ansible/PowerShell baselines and the CI pipeline are still to come. See
+`PROGRESS.md` for the full phase plan and exactly what's done.
 
 ## License
 
