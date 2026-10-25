@@ -1,0 +1,9 @@
+{
+  "name": "hybrid-platform-lab-capture",
+  "private": true,
+  "type": "module",
+  "description": "Generates docs/screenshots/10-11 from real terraform test / ansible script runs.",
+  "dependencies": {
+    "playwright": "^1.64.1"
+  }
+}

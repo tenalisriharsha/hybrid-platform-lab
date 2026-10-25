@@ -1,6 +1,6 @@
 # Hybrid Platform Lab - Build Progress
 
-STATUS: IN_PROGRESS
+STATUS: COMPLETE
 
 ## Vision
 
@@ -13,11 +13,11 @@ A self-service VM platform for development and validation environments across VM
 - [x] **Phase 3 - Terraform**: modules/proxmox-vm (bpg/proxmox) and modules/azure-vm (azurerm), dev and validation environment folders, terraform test with mock_provider, API backends that render tfvars and run terraform plan only.
 - [x] **Phase 4 - Ansible and Windows baseline**: linux-baseline role run against a Docker container with ansible-lint and an idempotence check; PowerShell Windows Server baseline script with Pester.
 - [x] **Phase 5 - CI and docs**: one GitHub Actions workflow with five jobs (pytest/ruff, Pester with vcsim service container, terraform test, Ansible, Windows Pester), RUNBOOK.md, docs/modernization.md.
-- [ ] **Phase 6 - Previews and polish**: scripts/capture generating 4-5+ real screenshots, public-facing README, DAILY_REPORT.md, STATUS: COMPLETE.
+- [x] **Phase 6 - Previews and polish**: scripts/capture generating 4-5+ real screenshots, public-facing README, DAILY_REPORT.md, STATUS: COMPLETE.
 
 ## Resume point
 
-**Phase 5 is done.** Start session 6 at **Phase 6** (`scripts/capture` generating 4-5+ real screenshots covering every component - Swagger UI, a real create/list round trip, pytest/ruff output, the Pester suite against vcsim, a drift report, `Invoke-SnapshotPolicy -WhatIf` refusing a protected VM, `terraform test`, and the Ansible run with `ansible-lint` - a public-facing README Preview section embedding them, DAILY_REPORT.md, and STATUS: COMPLETE). Everything else is built and tested; Phase 6 is purely previews, docs polish, and the completion report. Watch the first real run of `.github/workflows/ci.yml`'s `windows-pester` job on GitHub once this is pushed - it's the one job that was never run end-to-end locally (by design, Windows-only), so its first real result is worth checking even though the build itself is complete.
+**The project is complete.** All 6 phases are built and tested; there is no further work queued. If anything is picked up again later, the one thing worth checking first is the first real run of `.github/workflows/ci.yml`'s `windows-pester` job on GitHub once this is pushed - it's the one job that was never run end-to-end locally (by design, Windows-only; it mirrors the same mocked assertions that pass on this machine, see Phase 6 below). Everything else - the API, all three provisioning backends, both host baselines, CI, docs, and previews - has a genuine local test run behind it from this final session.
 
 This repository was rebuilt from the brief above after an earlier build used the wrong design (a Java API, Angular dashboard and Helm chart that were not requested); that content was removed. Do not reintroduce any Java, Maven, Angular or Helm. The stack is Python (FastAPI), PowerShell/PowerCLI, Terraform, Ansible and GitHub Actions only. `.gitignore` already covers node_modules, .venv, __pycache__, .terraform, .ansible, .pytest_cache - extend it if Phase 3 needs more (e.g. `.terraform.lock.hcl` is fine to commit, but never commit a `.tfstate`).
 
@@ -73,6 +73,15 @@ This repository was rebuilt from the brief above after an earlier build used the
 - **`docs/modernization.md`** - a decision table (workload type × VMware/containers/Azure) covering stateless services, legacy Windows apps, short-lived dev/test environments, stateful/latency-sensitive services, burst capacity, compliance-bound workloads, network appliances, and greenfield tools, plus a short "not yet built" section (no container backend, no automated migration tooling) so the table doesn't imply more exists than does.
 - README gained an "Operations" section linking both new docs, a "CI" section describing the five jobs, and the Status section now lists CI/docs as done - only previews remain.
 - Nothing in `api/`, `powercli/`, `terraform/`, `ansible/`, or `windows/` changed this session - Phase 5 is pure CI wiring plus documentation. Test counts are unchanged from Phase 4: 54 pytest tests, 35 Pester tests against vcsim (+7 mock-only), 16 `terraform test` runs, the Ansible idempotence check, and the 10 mocked `WindowsBaseline` Pester tests.
+
+### What Phase 6 added
+
+- **`scripts/capture/`** - `capture-screenshots.mjs` (Node/Playwright) genuinely runs `terraform test` (in `terraform/modules/proxmox-vm`) and `./scripts/run-ansible-tests.sh` via `child_process.execFileSync`, captures their real stdout/stderr, and screenshots the result into `docs/screenshots/10-terraform-test.png` and `11-ansible-lint-idempotence.png` using `template.mjs` (a small HTML/CSS terminal-card template matching the visual style of the Phase 2 `07`-`09` screenshots - dark card, macOS-style traffic lights, content-driven syntax coloring via regex on the real output, never hand-styled per line). The Ansible screenshot's task-by-task detail (16 tasks applied twice) is elided with an explicit `... (output truncated - ...)` line per screenshot rules - everything else, including both `PLAY RECAP` lines and the lint/idempotence summary, is verbatim. Needs `cd scripts/capture && npm install` first (installs `playwright`, gitignored via the existing `node_modules/` rule) and a `terraform`/Docker on `PATH`.
+- Found and fixed one bug in `capture-screenshots.mjs` while verifying it end-to-end: the helper that truncates between two markers searched for the *first* occurrence of the end marker in the whole output rather than the first occurrence *after* the start marker, so the second `PLAY RECAP` truncation silently matched the first (earlier) one and produced a 3600px-tall screenshot instead of a ~1000px one on the first real run. Fixed by searching only the slice of lines after the start marker; re-ran the script and confirmed both screenshots came out the expected size before committing.
+- `docs/screenshots/01`-`09` (Swagger UI, create/list round trip, pytest, ruff, metrics, Pester vs. vcsim, drift report, `Invoke-SnapshotPolicy -WhatIf`) were already in place from Phases 1-2 - nothing needed to change there. 11 screenshots total now cover every component named in the original brief's PREVIEWS list.
+- README gained the two new preview entries, a note on regenerating them via `scripts/capture`, a `scripts/capture/` line in the project layout, and a final `## Status` section stating the project is complete (previously it said "preview captures... are the only thing left"). No build-diary language was present to begin with - this session kept it that way.
+- **Full test suite re-run from scratch this session, all green**: 54 pytest tests (`cd api && python -m pytest -v`, including both live tests - a real vcsim provision/deprovision round trip and a real `terraform plan` against the Proxmox dev environment), `ruff check .` clean, `terraform fmt -recursive -check`/`validate`/`test` clean across all 6 module/environment folders (16/16 `terraform test` runs), the full Pester suite against vcsim in both vCenter and ESXi modes (35/35, ~268s, via `./scripts/run-pester-tests.sh`), the `WindowsBaseline` mocked Pester suite (10/10, runs fine on macOS since every Windows-only cmdlet is wrapped and mocked), and `./scripts/run-ansible-tests.sh` (lint clean, second apply `changed=0` - genuine idempotence). All containers started during these runs were torn down afterward.
+- `DAILY_REPORT.md` written, summarizing what was built across the whole project, the final test results, known limitations, and ideas for future work.
 
 ### Design notes to carry forward
 
