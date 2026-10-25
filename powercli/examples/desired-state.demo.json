@@ -1,0 +1,5 @@
+[
+    { "Name": "lab-dev-box-1",    "PowerState": "PoweredOn"  },
+    { "Name": "lab-ci-runner-1",  "PowerState": "PoweredOff" },
+    { "Name": "lab-qa-box-1",     "PowerState": "PoweredOn"  }
+]
