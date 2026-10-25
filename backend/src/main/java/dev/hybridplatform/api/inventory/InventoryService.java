@@ -4,6 +4,8 @@ import dev.hybridplatform.api.inventory.domain.Datastore;
 import dev.hybridplatform.api.inventory.domain.Host;
 import dev.hybridplatform.api.inventory.domain.PowerState;
 import dev.hybridplatform.api.inventory.domain.VirtualMachine;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
@@ -11,6 +13,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 /**
@@ -26,8 +29,16 @@ public class InventoryService {
     private final Map<String, VirtualMachine> vms = new ConcurrentHashMap<>();
     private final Map<String, Datastore> datastores = new ConcurrentHashMap<>();
 
-    public InventoryService() {
+    @Autowired
+    public InventoryService(MeterRegistry meterRegistry) {
         seed();
+        meterRegistry.gauge("platform_inventory_hosts", hosts, Map::size);
+        meterRegistry.gauge("platform_inventory_vms", vms, Map::size);
+        meterRegistry.gauge("platform_inventory_datastores", datastores, Map::size);
+    }
+
+    public InventoryService() {
+        this(new SimpleMeterRegistry());
     }
 
     private void seed() {
