@@ -173,7 +173,7 @@ sized to fit one session.
   - CI (`.github/workflows/ci.yml`) gained an `observability` job running
     the `promtool`/`amtool` config checks
 
-- [ ] **Phase 5 — Kubernetes & Frontend Dashboard** *(in progress — see Resume Point)*
+- [x] **Phase 5 — Kubernetes & Frontend Dashboard**
   - [x] Helm chart in `helm/platform-api/` for `platform-api`: Deployment (2
     replicas), ClusterIP Service, dedicated ServiceAccount, startup/liveness/
     readiness probes wired to Spring Boot Actuator's health probe groups
@@ -199,8 +199,8 @@ sized to fit one session.
     (`WebConfig`) so the Angular dev server / dashboard container can call
     the API cross-origin. 5 new backend tests (service + controller); 46
     backend tests total, all passing
-  - [ ] Angular dashboard in `frontend/` — **scaffolded but not yet tested or
-    verified working**: generated with `@angular/cli@18` (standalone
+  - [x] Angular dashboard in `frontend/` — built out, verified, and tested
+    end to end: generated with `@angular/cli@18` (standalone
     components, no routing module, zoneless-ready). Built out:
     - `core/platform-api.service.ts` + `core/models/inventory.ts`: typed
       HTTP client for `/api/v1/{summary,hosts,vms,datastores}` +
@@ -220,69 +220,67 @@ sized to fit one session.
     - Global theme tokens (light/dark, `prefers-color-scheme` + `data-theme`
       override) added to `src/styles.css` from the dataviz skill's reference
       palette
-    - **Not yet done**: only one spec file exists so far
-      (`app.component.spec.ts`, using `HttpTestingController` — written but
-      **never run**). No tests for `platform-api.service`, `summary-panel`,
-      `hosts-table`, `vms-table`, `datastores-table`, `stat-tile`, or
-      `status-badge`. `npm test` / `npm run build` have not been run against
-      this code at all — there may be compile errors, template errors, or
-      runtime bugs not yet caught. No e2e smoke test. No Dockerfile/nginx
-      config for serving the built app, and it is not wired into
-      `docker-compose.yml`. No CI `frontend` job.
+    - `npm run build` succeeds; `npm test -- --watch=false --browsers=
+      ChromeHeadless` runs 29 specs, all passing: `app.component.spec.ts`
+      (fixed — it assumed `timer(0, ...)` emits synchronously on
+      `detectChanges()`, which it doesn't; rewritten with `fakeAsync`/
+      `tick()`/`discardPeriodicTasks()`), plus new specs for
+      `platform-api.service` (one test per HTTP method via
+      `HttpTestingController`), `summary-panel` (loading/success/error
+      states for both the summary and health polls, including a second
+      15s poll tick), `hosts-table`/`vms-table`/`datastores-table`
+      (rendered rows, empty state, error state; `vms-table` additionally
+      covers the suspended-VM disabled button and the power toggle
+      actually posting and updating the row), and `stat-tile`/
+      `status-badge` (render checks)
+    - `ng serve --proxy-config proxy.conf.json` run against a real
+      `mvn spring-boot:run` `platform-api`, exercised with a headless
+      Playwright script: all three tabs render live seeded data, the VM
+      power toggle posts to `/api/v1/vms/{id}/power` and updates the row,
+      and dark mode (`prefers-color-scheme`) renders correctly — confirmed
+      by inspecting the captured screenshots
+    - `frontend/e2e/smoke.spec.ts`: a Playwright suite (3 tests) against
+      the same real `ng serve` + `platform-api` pair — dashboard loads
+      real inventory/health, tab switching loads VMs/datastores, and the
+      power toggle call updates the row. `npm run e2e` runs it
+    - `frontend/Dockerfile` (multi-stage: `npm run build` under
+      `node:20-alpine`, served by `nginx:1.27-alpine`) + `nginx.conf`
+      reverse-proxying `/api` and `/actuator` to `platform-api:8080` —
+      built and smoke-tested standalone (static page + API proxy both
+      returned 200, image is 76 MB). Wired into `docker-compose.yml` as a
+      `frontend` service on port 4200, depending on `platform-api`
+    - CI (`.github/workflows/ci.yml`) gained a `frontend` job (npm ci,
+      build, `ng test --browsers=ChromeHeadless`)
+    - `frontend/README.md` rewritten with real dev/test/Docker instructions
 
-- [ ] **Phase 6 — Hardening & Delivery**
-  - End-to-end pass across every layer with the full combined test suite green
-  - Final README with complete Preview section, `DAILY_REPORT.md` written
+- [x] **Phase 6 — Hardening & Delivery**
+  - Full combined test suite re-run clean in this session: backend 41
+    tests, frontend 29 unit specs + 3 Playwright e2e tests, Terraform 6
+    `terraform test` cases (+ `fmt`/`validate`), the full Ansible
+    `run-tests.sh` (lint + check-mode + real run + idempotency +
+    overrides + rejected input), the Helm chart's `run-tests.sh` (lint +
+    4 rendering assertions), and the observability `promtool`/`amtool`
+    config checks — nothing left failing or unverified
+  - 4 new dashboard screenshots captured with Playwright against the real
+    running stack (hosts tab, VMs tab with a mixed power state and the
+    toggle button, datastores tab with usage bars, dark mode), each opened
+    and visually checked before being embedded; README Preview section now
+    has 14 images total covering every layer of the platform
+  - README finalized: Quick Start covers the dashboard, a Dashboard and a
+    Kubernetes subsection added under the running-the-stack instructions,
+    the endpoint table gained `/api/v1/summary`, Testing covers the
+    frontend/Helm suites, Status reflects every layer as done
+  - `DAILY_REPORT.md` written
   - `STATUS: COMPLETE` in this file
 
 ## Resume Point
 
-**Next session starts here:** finish Phase 5 (frontend verification +
-wiring), then do Phase 6.
+This project is complete. All six phases are implemented, tested, and
+documented — see the phase list above for what was built and how it was
+verified, and `DAILY_REPORT.md` for the full build summary, test results,
+known limitations, and future ideas. There is no planned next step; if
+resuming work on this repo, start by re-running the combined test suite
+listed in README's Testing section to confirm nothing has drifted, then
+treat anything in DAILY_REPORT.md's "Future ideas" section as the backlog.
 
-The Helm chart and the `platform-api` summary endpoint are done, tested, and
-committed (see Phase 5 above — chart tests pass, and it was actually
-deployed to a real local cluster). The Angular dashboard under `frontend/`
-is scaffolded and believed functionally complete (see Phase 5 above for the
-full list of what was built) but **has not been run or tested yet** — treat
-it as unverified. Start here, in order:
-
-1. `cd frontend && npm install` (already run once; re-run if `node_modules`
-   is missing) `&& npm run build` — fix any compile/template errors first.
-2. `npm test -- --watch=false --browsers=ChromeHeadless` (or whatever
-   headless launcher is available) — the existing `app.component.spec.ts`
-   has never been executed. Fix failures, then write the missing specs:
-   `platform-api.service.spec.ts` (HttpTestingController, one test per
-   method), `summary-panel.component.spec.ts` (loading/success/error
-   states for both the summary and health polls), `hosts-table`/
-   `vms-table`/`datastores-table` component specs (render seeded data;
-   `vms-table` additionally test the power-toggle button posts to
-   `/api/v1/vms/{id}/power` and updates the row), `stat-tile` and
-   `status-badge` specs (trivial render checks).
-3. `ng serve` against a running `platform-api` (`docker compose up
-   platform-api vcsim` or `mvn spring-boot:run`) and manually click through
-   all three tabs plus a power toggle to confirm it actually works end to
-   end — the proxy config (`frontend/proxy.conf.json`) should make `ng
-   serve` forward `/api` and `/actuator` to `localhost:8080` without CORS
-   issues, but this has not been exercised.
-4. Add at least a smoke-level e2e check (Playwright, consistent with how
-   screenshots are captured for this README) asserting the dashboard
-   renders real data from a running `platform-api`.
-5. Give the frontend a Dockerfile (build the Angular app, serve it via
-   nginx, reverse-proxy `/api` and `/actuator` to `platform-api:8080` so the
-   container doesn't need the dev proxy) and wire it into
-   `docker-compose.yml` as its own service so `docker compose up` serves it
-   end to end.
-6. Add a `frontend` CI job (npm install/build/test) to
-   `.github/workflows/ci.yml`.
-7. Update `frontend/README.md` (still a placeholder) once the above is
-   real.
-
-Only once all of that is genuinely green should Phase 5's checkbox flip to
-done. Phase 6 (hardening, full combined test suite, final README with the
-Preview section refreshed to include dashboard screenshots, DAILY_REPORT.md,
-`STATUS: COMPLETE`) has no slack left to build net-new features — budget
-the next session's time accordingly, front-loading the frontend
-verification above.
-
-STATUS: IN_PROGRESS
+STATUS: COMPLETE
