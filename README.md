@@ -5,7 +5,9 @@
 A self-service VM platform spanning VMware vSphere, Proxmox VE and Azure. One
 REST API validates every request against an approved catalog of templates and
 sizes, then hands provisioning off to a backend module per platform: a
-PowerCLI module for vSphere, and Terraform for Proxmox and Azure.
+PowerCLI module for vSphere (the `New-LabVM` / `Get-VMInventoryReport` /
+`Invoke-SnapshotPolicy` cmdlets, driven through `pwsh`), and Terraform for
+Proxmox and Azure.
 
 **Nothing in this repository touches a real vSphere, Proxmox or Azure
 environment.** vSphere automation is exercised against [vcsim](https://github.com/vmware/govmomi/tree/main/vcsim),
@@ -45,7 +47,7 @@ curl -s http://127.0.0.1:8000/environments
 curl -s http://127.0.0.1:8000/metrics
 ```
 
-Run the tests:
+Run the API tests:
 
 ```bash
 cd api
@@ -53,11 +55,24 @@ python -m pytest -v
 ruff check .
 ```
 
+The PowerCLI module (`powercli/HybridLab`) is tested with Pester against
+[vcsim](https://github.com/vmware/govmomi/tree/main/vcsim), VMware's
+vCenter/ESXi simulator. Requires `pwsh` and Docker:
+
+```bash
+./scripts/run-pester-tests.sh
+```
+
+This starts a vcsim container in vCenter mode and one in standalone-ESXi
+mode, runs every `New-LabVM` / `Get-VMInventoryReport` / `Invoke-SnapshotPolicy`
+test against both, and tears the containers down afterwards.
+
 ## Preview
 
 The interactive API docs (Swagger UI), a real create/list round trip against
-the running API, the test suite passing, lint passing, and the live
-Prometheus metrics endpoint:
+the running API, the test suite passing, lint passing, the live Prometheus
+metrics endpoint, the PowerCLI test suite running against vcsim, a real
+drift report, and the snapshot policy refusing a protected VM:
 
 | | |
 |---|---|
@@ -67,6 +82,10 @@ Prometheus metrics endpoint:
 | `GET /environments` returning real, seeded environments | The full pytest suite passing |
 | ![ruff check](docs/screenshots/05-ruff-check.png) | ![Prometheus metrics](docs/screenshots/06-metrics-endpoint.png) |
 | `ruff check .` with zero findings | `/metrics` serving live Prometheus counters and histograms |
+| ![Pester suite against vcsim](docs/screenshots/07-pester-suite-vcsim.png) | ![Inventory drift report](docs/screenshots/08-inventory-drift-report.png) |
+| The PowerCLI Pester suite - 35 tests - passing against vcsim in both vCenter and ESXi modes | `Get-VMInventoryReport` catching a missing VM, a power-state mismatch and an unexpected VM |
+| ![Invoke-SnapshotPolicy refusing a protected VM](docs/screenshots/09-snapshot-policy-protected-whatif.png) | |
+| `Invoke-SnapshotPolicy -WhatIf` previewing two snapshots and refusing a VM marked protected | |
 
 ## How it works
 
@@ -106,15 +125,47 @@ lists what's currently approved. Nothing outside that catalog is accepted.
 The API never provisions anything itself - it derives a backend from the
 template and delegates to it:
 
-- **vSphere** - calls a PowerCLI module (`New-LabVM`, `Get-VMInventoryReport`,
-  `Invoke-SnapshotPolicy`) through `pwsh`, tested against vcsim.
-- **Proxmox** and **Azure** - render Terraform `tfvars` and run
-  `terraform plan` only. Nothing is ever applied.
+- **vSphere** - shells out to `pwsh` and calls the `HybridLab` PowerCLI
+  module's `New-LabVM` (create) and `Remove-VM` (delete). Active once
+  `HYBRID_LAB_VSPHERE_SERVER`/`_USER`/`_PASSWORD` are set in the API's
+  environment; falls back to a simulated backend otherwise, so the API stays
+  usable without a real vCenter (or vcsim) on hand. See
+  [`powercli/README.md`](powercli/README.md) for the module itself.
+- **Proxmox** and **Azure** - still a simulated placeholder; the real
+  Terraform-backed implementation (render `tfvars`, run `terraform plan`
+  only, never apply) is tracked in `PROGRESS.md` for a later phase.
 
-As of the current state of this repository, all three backends are a
-`SimulatedBackend` placeholder so the API is fully testable end to end; the
-real vSphere backend and the real Terraform backends are tracked in
-`PROGRESS.md` and land in later phases without changing the API surface.
+### The vSphere backend
+
+```
+DELETE /environments/{id}      POST /environments
+          │                           │
+          ▼                           ▼
+ app/backends/vsphere.py  (env-configured: server/user/password, template → source-VM map)
+          │
+          ▼
+ pwsh -File powercli/scripts/Invoke-VSphere{Provision,Deprovision}.ps1
+          │
+          ▼
+ HybridLab module: New-LabVM clones + marks the VM, or Remove-VM deletes it
+```
+
+Owner/expiry/protected are written onto the VM itself - as vSphere tags on a
+real vCenter, or as a `Notes` marker when tags aren't available (vcsim's
+vCenter simulation never supports them; see `powercli/README.md`). The
+password is read from `HYBRID_LAB_VSPHERE_PASSWORD` by the PowerShell script
+itself, never passed as a command-line argument, so it never shows up in a
+process listing.
+
+| Environment variable | Required | Purpose |
+|---|---|---|
+| `HYBRID_LAB_VSPHERE_SERVER` | yes | vCenter/ESXi host or IP. Backend falls back to simulated when unset. |
+| `HYBRID_LAB_VSPHERE_USER` | yes | Username for `Connect-VIServer`. |
+| `HYBRID_LAB_VSPHERE_PASSWORD` | yes | Password; read by the pwsh script, never passed as a CLI argument. |
+| `HYBRID_LAB_VSPHERE_PORT` | no | Default `443` (vcsim typically uses `8989`/`8990`). |
+| `HYBRID_LAB_VSPHERE_PORTGROUP` | no | Default `VM Network`. |
+| `HYBRID_LAB_VSPHERE_MODULE_PATH` | no | Path to the `HybridLab` module; defaults to the one in this repo. |
+| `HYBRID_LAB_VSPHERE_TEMPLATE_OVERRIDES` | no | JSON map of catalog template → actual source VM name, e.g. `{"ubuntu-22.04-vsphere":"DC0_H0_VM0"}` for pointing at a vcsim fixture VM instead of `catalog.py`'s placeholder name. |
 
 ## Project layout
 
@@ -122,6 +173,12 @@ real vSphere backend and the real Terraform backends are tracked in
 api/                FastAPI service: catalog, models, store, backends, routers
   app/
   tests/
+powercli/            HybridLab PowerCLI module (New-LabVM, Get-VMInventoryReport, Invoke-SnapshotPolicy)
+  HybridLab/           module source (Public/Private cmdlets)
+  scripts/             pwsh entry points the API's vSphere backend shells out to
+  Tests/               Pester suite (run via scripts/run-pester-tests.sh)
+scripts/
+  run-pester-tests.sh  starts vcsim (vCenter + ESXi modes) and runs the Pester suite
 docs/
   screenshots/       Preview images embedded above
 PROGRESS.md          Build plan and phase-by-phase history
@@ -130,11 +187,12 @@ DAILY_REPORT.md       Written once the project is complete
 
 ## Status
 
-Early stage. The FastAPI self-service API (catalog validation, the
-environments CRUD surface, Prometheus metrics) is built and tested; the
-PowerCLI module, Terraform modules, Ansible/PowerShell baselines and CI
-pipeline are still to come. See `PROGRESS.md` for the full phase plan and
-exactly what's done.
+The FastAPI self-service API (catalog validation, the environments CRUD
+surface, Prometheus metrics) and the vSphere path (the `HybridLab` PowerCLI
+module plus a real backend that drives it through `pwsh`) are built and
+tested. Terraform modules for Proxmox/Azure, Ansible/PowerShell baselines
+and the CI pipeline are still to come. See `PROGRESS.md` for the full phase
+plan and exactly what's done.
 
 ## License
 
