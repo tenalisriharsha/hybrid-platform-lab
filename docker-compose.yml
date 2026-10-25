@@ -15,6 +15,15 @@ services:
     depends_on:
       - vcsim
 
+  frontend:
+    build:
+      context: ./frontend
+    container_name: hpl-frontend
+    ports:
+      - "4200:80"
+    depends_on:
+      - platform-api
+
   prometheus:
     image: prom/prometheus
     container_name: hpl-prometheus
