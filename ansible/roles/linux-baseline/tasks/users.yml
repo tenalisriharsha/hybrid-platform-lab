@@ -1,0 +1,22 @@
+---
+- name: Ensure admin groups exist
+  ansible.builtin.group:
+    name: "{{ item }}"
+    state: present
+  loop: "{{ linux_baseline_admin_user_groups }}"
+
+- name: Create the baseline admin user
+  ansible.builtin.user:
+    name: "{{ linux_baseline_admin_user }}"
+    groups: "{{ linux_baseline_admin_user_groups }}"
+    append: true
+    shell: "{{ linux_baseline_admin_user_shell }}"
+    create_home: true
+    state: present
+
+- name: Install the admin user's SSH public key
+  ansible.posix.authorized_key:
+    user: "{{ linux_baseline_admin_user }}"
+    key: "{{ linux_baseline_admin_user_ssh_key }}"
+    state: present
+  when: linux_baseline_admin_user_ssh_key | length > 0

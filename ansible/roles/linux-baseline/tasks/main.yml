@@ -1,0 +1,16 @@
+---
+- name: Install baseline packages
+  ansible.builtin.include_tasks: packages.yml
+
+- name: Create and configure the baseline admin user
+  ansible.builtin.include_tasks: users.yml
+
+- name: Apply SSH hardening
+  ansible.builtin.include_tasks: ssh.yml
+
+- name: Manage baseline services
+  ansible.builtin.include_tasks: services.yml
+
+- name: Install and manage node_exporter
+  ansible.builtin.include_tasks: node_exporter.yml
+  when: linux_baseline_node_exporter_install | bool

@@ -1,0 +1,6 @@
+---
+- name: Restart sshd
+  ansible.builtin.systemd_service:
+    name: "{{ linux_baseline_ssh_service_name }}"
+    state: restarted
+  when: linux_baseline_manage_services | bool
