@@ -1,0 +1,16 @@
+apiVersion: v2
+name: platform-api
+description: Hybrid Platform Lab control-plane API (inventory REST + Prometheus metrics)
+type: application
+version: 0.1.0
+appVersion: "2"
+home: https://github.com/tenalisriharsha/hybrid-platform-lab
+sources:
+  - https://github.com/tenalisriharsha/hybrid-platform-lab
+keywords:
+  - platform
+  - vmware
+  - inventory
+  - observability
+maintainers:
+  - name: tenalisriharsha

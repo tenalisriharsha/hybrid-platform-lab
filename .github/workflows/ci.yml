@@ -70,6 +70,20 @@ jobs:
         working-directory: infra/ansible
         run: ./tests/run-tests.sh
 
+  helm:
+    name: Helm chart (lint + template)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: "v3.16.3"
+
+      - name: Lint and render the platform-api chart
+        run: helm/platform-api/tests/run-tests.sh
+
   observability:
     name: Observability (config checks)
     runs-on: ubuntu-latest
