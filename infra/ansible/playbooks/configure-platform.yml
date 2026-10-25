@@ -1,0 +1,6 @@
+---
+- name: Configure Hybrid Platform Lab deployment artifacts
+  hosts: lab
+  gather_facts: false
+  roles:
+    - platform_config
