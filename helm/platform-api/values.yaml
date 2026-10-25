@@ -1,0 +1,39 @@
+replicaCount: 2
+
+image:
+  repository: hybrid-platform-lab-platform-api
+  tag: latest
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 8080
+
+env: []
+# Extra env vars for platform-api, e.g.:
+# env:
+#   - name: SPRING_PROFILES_ACTIVE
+#     value: "lab"
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+probes:
+  startupPath: /actuator/health
+  livenessPath: /actuator/health/liveness
+  readinessPath: /actuator/health/readiness
+
+serviceAccount:
+  create: true
+  name: ""
+
+podAnnotations: {}
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
