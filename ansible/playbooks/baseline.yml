@@ -1,0 +1,6 @@
+---
+- name: Apply the hybrid-platform-lab Linux baseline
+  hosts: linux_hosts
+  become: true
+  roles:
+    - linux-baseline

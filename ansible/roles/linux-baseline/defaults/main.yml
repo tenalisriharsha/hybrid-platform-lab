@@ -1,0 +1,34 @@
+---
+# Baseline package set applied to every managed host.
+linux_baseline_packages:
+  - curl
+  - vim
+  - chrony
+  - openssh-server
+  - sudo
+
+# Local admin account created/managed on every managed host.
+linux_baseline_admin_user: labadmin
+linux_baseline_admin_user_shell: /bin/bash
+linux_baseline_admin_user_groups:
+  - sudo
+linux_baseline_admin_user_ssh_key: ""
+
+# SSH hardening (applied to /etc/ssh/sshd_config).
+linux_baseline_ssh_service_name: ssh
+linux_baseline_ssh_permit_root_login: "no"
+linux_baseline_ssh_password_authentication: "no"
+linux_baseline_ssh_x11_forwarding: "no"
+linux_baseline_ssh_max_auth_tries: 4
+linux_baseline_ssh_client_alive_interval: 300
+
+# Containers used for testing have no running init system, so service
+# start/enable/restart tasks are skipped there. Real hosts (and CI's
+# windows-latest-style full VMs) should leave this true.
+linux_baseline_manage_services: true
+
+# node_exporter, installed from the distro package rather than a
+# hand-downloaded binary so there is no checksum/version to track here.
+linux_baseline_node_exporter_install: true
+linux_baseline_node_exporter_package: prometheus-node-exporter
+linux_baseline_node_exporter_service_name: prometheus-node-exporter

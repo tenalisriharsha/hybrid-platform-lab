@@ -1,0 +1,22 @@
+---
+galaxy_info:
+  role_name: linux_baseline
+  author: tenalisriharsha
+  description: Baseline hardening for Linux lab VMs (users, SSH, packages, node_exporter)
+  license: MIT
+  min_ansible_version: "2.15"
+  platforms:
+    - name: Debian
+      versions:
+        - bookworm
+        - trixie
+    - name: Ubuntu
+      versions:
+        - jammy
+        - noble
+  galaxy_tags:
+    - baseline
+    - hardening
+    - monitoring
+
+dependencies: []

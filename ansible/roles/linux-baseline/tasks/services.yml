@@ -1,0 +1,16 @@
+---
+# Containers used in CI have no running init system (systemd_service would
+# fail outright), so these are skipped there and verified on real hosts only.
+- name: Enable and start chrony
+  ansible.builtin.systemd_service:
+    name: chrony
+    enabled: true
+    state: started
+  when: linux_baseline_manage_services | bool
+
+- name: Enable and start sshd
+  ansible.builtin.systemd_service:
+    name: "{{ linux_baseline_ssh_service_name }}"
+    enabled: true
+    state: started
+  when: linux_baseline_manage_services | bool
