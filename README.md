@@ -252,6 +252,7 @@ see [`windows/README.md`](windows/README.md).
 ## Project layout
 
 ```
+.github/workflows/ci.yml  5-job CI: pytest/ruff, Pester vs vcsim, terraform test, Ansible, Windows Pester
 api/                FastAPI service: catalog, models, store, backends, routers
   app/
   tests/
@@ -273,9 +274,30 @@ scripts/
   run-ansible-tests.sh  lints and idempotence-checks linux-baseline against a Docker container
 docs/
   screenshots/       Preview images embedded above
+  modernization.md    Decision table: VMware vs. containers vs. Azure
+RUNBOOK.md           Operational procedures: failed provisioning, capacity, rollback, failed CI
 PROGRESS.md          Build plan and phase-by-phase history
 DAILY_REPORT.md       Written once the project is complete
 ```
+
+## Operations
+
+- [`RUNBOOK.md`](RUNBOOK.md) - what to do when provisioning fails, capacity
+  runs out, a change needs rolling back, or a CI job goes red.
+- [`docs/modernization.md`](docs/modernization.md) - a decision table for
+  which workloads stay on VMware, which move to containers, and which move
+  to Azure.
+
+## CI
+
+[`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs five independent
+jobs on every push: `api` (pytest + ruff), `pester-vcsim` (the PowerCLI suite
+against vcsim in both vCenter and ESXi modes), `terraform` (fmt, validate,
+and `terraform test` across every module and environment), `ansible` (lint
+plus the idempotence check), and `windows-pester` (the `WindowsBaseline`
+suite on a real `windows-latest` runner - the only place its Windows-only
+cmdlet wrappers are exercised for real, since this project is developed on
+macOS).
 
 ## Status
 
@@ -283,10 +305,11 @@ The FastAPI self-service API (catalog validation, the environments CRUD
 surface, Prometheus metrics), the vSphere path (the `HybridLab` PowerCLI
 module plus a real backend that drives it through `pwsh`), the Proxmox/Azure
 path (the `proxmox-vm`/`azure-vm` Terraform modules plus real backends that
-plan, never apply, against them), and the host baselines (the Ansible
-`linux-baseline` role and the `WindowsBaseline` PowerShell module) are built
-and tested. The CI pipeline and final docs are still to come. See
-`PROGRESS.md` for the full phase plan and exactly what's done.
+plan, never apply, against them), the host baselines (the Ansible
+`linux-baseline` role and the `WindowsBaseline` PowerShell module), and the
+CI pipeline and operational docs are built and tested. Preview captures of
+every component in action are the only thing left. See `PROGRESS.md` for the
+full phase plan and exactly what's done.
 
 ## License
 
