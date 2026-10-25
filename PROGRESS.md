@@ -91,14 +91,23 @@ sized to fit one session.
   - GitHub Actions CI workflow (Maven build + test)
   - MIT license, README with quick start, CI badge, and Preview section
 
-- [ ] **Phase 2 — VMware Integration Layer**
-  - PowerCLI module in `infra/powershell/` connecting to `vcsim`, pulling
-    live hosts/VMs/datastores, exporting inventory as JSON
-  - Pester tests + PSScriptAnalyzer clean run for the module
-  - `platform-api` gains a `/api/v1/sync` endpoint that ingests that JSON
-    and replaces in-memory sample data with real vcsim-sourced inventory
-  - Integration test that spins up `vcsim`, runs the sync, and asserts the
-    API reflects it
+- [x] **Phase 2 — VMware Integration Layer**
+  - `HybridPlatformSync` PowerCLI module in `infra/powershell/`: connects to
+    `vcsim`, enumerates hosts/VMs/datastores, converts them to
+    `platform-api`'s JSON shape, and can export or POST that snapshot
+  - 9 Pester tests (conversion functions + the connect/snapshot/post/
+    disconnect flow, mocked — no live vcsim needed) and a clean
+    PSScriptAnalyzer pass (`infra/powershell/Run-Tests.ps1`)
+  - `platform-api` gained `POST /api/v1/sync`: atomically replaces the
+    in-memory hosts/VMs/datastores with a synced estate, validating that
+    every synced VM references a host in the same payload before
+    committing (rejects with 400 otherwise, leaving prior state intact).
+    The Phase 1 seed data is now purely a fallback shown until the first
+    sync lands
+  - `scripts/integration-test-sync.sh`: a real end-to-end check that boots
+    `vcsim` + `platform-api` via `docker compose`, runs
+    `Sync-PlatformInventory` against them, and asserts the API's inventory
+    reflects vcsim's live (simulated) estate — verified passing locally
 
 - [ ] **Phase 3 — Infrastructure as Code**
   - Terraform modules in `infra/terraform/` describing platform resources
@@ -130,16 +139,21 @@ sized to fit one session.
 
 ## Resume Point
 
-**Next session starts here:** Phase 2 — VMware Integration Layer.
+**Next session starts here:** Phase 3 — Infrastructure as Code.
 
-Start by writing the PowerCLI module under `infra/powershell/` (connect to
-the `vcsim` container already wired into `docker-compose.yml`, enumerate
-hosts/VMs/datastores, export as JSON), add Pester tests + a clean
-PSScriptAnalyzer pass, then add the `/api/v1/sync` endpoint to `platform-api`
-(see `backend/src/main/java/dev/hybridplatform/api/inventory/`) to ingest
-that JSON. Add an integration test that boots `vcsim` via docker-compose and
-verifies the sync end to end. `platform-api`'s existing in-memory sample
-data (`InventoryService`) should become the fallback/seed used only when no
-sync has happened yet.
+Start with Terraform modules under `infra/terraform/` describing platform
+resources — model them against the `vsphere` provider pointed at `vcsim`
+where that's realistic (hosts/VMs/datastores already have real analogues
+there), and mock elsewhere. Validate with `terraform fmt -check`,
+`terraform validate`, and `terraform test` using `mock_provider` (no real
+cloud/vCenter calls — `vcsim` plan-level usage, if attempted, should stay
+read-only and bounded). Then write Ansible playbooks/roles under
+`infra/ansible/` for platform configuration tasks (e.g. shaping
+`platform-api`'s `application.yml`, or an `infra/powershell`-adjacent
+config step), keep `ansible-lint` clean, and use check-mode runs as the
+test layer (no real hosts to configure against, so assert on the
+diff/changed-resources output of `--check --diff`). Do not run
+`terraform apply`/`destroy` or any real AWS/cloud credentials — only dummy
+credentials exist in this environment.
 
 STATUS: IN_PROGRESS

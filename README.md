@@ -72,9 +72,32 @@ curl http://localhost:8080/actuator/health
 | `GET /api/v1/vms` | List virtual machines |
 | `POST /api/v1/vms/{id}/power` | Change a VM's power state |
 | `GET /api/v1/datastores` | List datastores |
+| `POST /api/v1/sync` | Replace the in-memory inventory with a synced estate |
 | `GET /api/v1/info` | Platform metadata |
 | `GET /actuator/health` | Liveness/readiness |
 | `GET /actuator/prometheus` | Prometheus-formatted metrics |
+
+### Syncing live inventory from vcsim
+
+The `HybridPlatformSync` PowerCLI module in `infra/powershell/` connects to
+`vcsim`, pulls its hosts/VMs/datastores, and posts them to `platform-api` so
+the API reflects a real (simulated) vSphere estate instead of its seeded
+sample data:
+
+```bash
+# with vcsim + platform-api already running (e.g. via docker compose up -d)
+pwsh -NoProfile -Command '
+  Import-Module ./infra/powershell/HybridPlatformSync/HybridPlatformSync.psd1
+  $cred = [pscredential]::new("user", (ConvertTo-SecureString "pass" -AsPlainText -Force))
+  Sync-PlatformInventory -VcsimServer 127.0.0.1 -VcsimPort 8989 -VcsimCredential $cred -ApiBaseUrl "http://localhost:8080"
+'
+```
+
+Or run the full end-to-end check (boots both containers, syncs, verifies, tears down):
+
+```bash
+./scripts/integration-test-sync.sh
+```
 
 ## Architecture
 
@@ -93,7 +116,7 @@ curl http://localhost:8080/actuator/health
                          │  Micrometer metrics   │
                          └──────┬───────┬────────┘
                                 │       │
-            sync inventory JSON │       │ /actuator/prometheus
+     POST /api/v1/sync inventory│       │ /actuator/prometheus
                                 │       │
           ┌─────────────────┐  │       │  ┌────────────────────────┐
           │ PowerShell /     │  │       │  │ Prometheus              │
@@ -127,16 +150,26 @@ docs/screenshots/   Preview images
 cd backend && mvn test
 ```
 
-30 unit and integration tests cover the inventory domain model, the
-in-memory inventory service, and every REST/Actuator endpoint.
+35 unit and integration tests cover the inventory domain model, the
+in-memory inventory service (including inventory sync), and every
+REST/Actuator endpoint.
+
+```bash
+pwsh -NoProfile -File infra/powershell/Run-Tests.ps1
+```
+
+Runs PSScriptAnalyzer and the Pester suite for the `HybridPlatformSync`
+module (datastore/host/VM conversion, JSON export, and the sync flow).
 
 ## Status
 
 `platform-api` (inventory domain, REST API, Actuator/Prometheus metrics,
-containerized with `vcsim`) is implemented and tested. VMware integration,
-infrastructure-as-code, the observability stack, Kubernetes deployment, and
-the Angular dashboard are in progress. See [PROGRESS.md](PROGRESS.md) for
-the full phase-by-phase build plan and history.
+containerized with `vcsim`) and the `HybridPlatformSync` PowerCLI module
+(pulling live inventory out of `vcsim` and syncing it into `platform-api`)
+are implemented and tested. Infrastructure-as-code, the observability
+stack, Kubernetes deployment, and the Angular dashboard are in progress.
+See [PROGRESS.md](PROGRESS.md) for the full phase-by-phase build plan and
+history.
 
 ## License
 
