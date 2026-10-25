@@ -173,12 +173,62 @@ sized to fit one session.
   - CI (`.github/workflows/ci.yml`) gained an `observability` job running
     the `promtool`/`amtool` config checks
 
-- [ ] **Phase 5 — Kubernetes & Frontend Dashboard**
-  - Helm chart in `helm/` for `platform-api` (passing `helm lint` /
-    `helm template`) plus equivalent kubectl manifests
-  - Angular dashboard in `frontend/` consuming the API: inventory table,
-    health/status view, metrics summary
-  - Component/e2e smoke tests for the dashboard
+- [ ] **Phase 5 — Kubernetes & Frontend Dashboard** *(in progress — see Resume Point)*
+  - [x] Helm chart in `helm/platform-api/` for `platform-api`: Deployment (2
+    replicas), ClusterIP Service, dedicated ServiceAccount, startup/liveness/
+    readiness probes wired to Spring Boot Actuator's health probe groups
+    (`management.endpoint.health.probes.enabled: true`, added to
+    `application.yml`). `helm lint --strict` clean; `helm/platform-api/
+    tests/run-tests.sh` asserts rendered output (default values + overridden
+    replicaCount/image.tag/env + serviceAccount.create=false) with no cluster
+    needed; static `helm template` output committed at `helm/platform-api/
+    manifests/platform-api.yaml`. **Actually deployed and verified against a
+    real local Kubernetes cluster** (existing `minikube` profile, docker
+    driver): built the backend image, `minikube image load`ed it, `helm
+    install`ed the chart, confirmed both replicas reach `Running`/`Ready`,
+    and curled `/api/v1/summary` + `/actuator/health` through the real
+    Service — see `helm/platform-api/tests/cluster-smoke-test.sh`, which
+    automates that whole install/verify/uninstall flow against whatever
+    cluster the current kubeconfig points at. CI gained a `helm` job running
+    the no-cluster chart tests
+  - [x] `platform-api` gained `GET /api/v1/summary`: a dashboard-friendly
+    rollup (host/VM/datastore counts, VM power-state breakdown, aggregate
+    datastore capacity/free) computed on demand from the live inventory maps,
+    so the dashboard doesn't need to fetch every entity or parse the
+    Prometheus text format client-side. Plus a permissive CORS config
+    (`WebConfig`) so the Angular dev server / dashboard container can call
+    the API cross-origin. 5 new backend tests (service + controller); 46
+    backend tests total, all passing
+  - [ ] Angular dashboard in `frontend/` — **scaffolded but not yet tested or
+    verified working**: generated with `@angular/cli@18` (standalone
+    components, no routing module, zoneless-ready). Built out:
+    - `core/platform-api.service.ts` + `core/models/inventory.ts`: typed
+      HTTP client for `/api/v1/{summary,hosts,vms,datastores}` +
+      `POST /api/v1/vms/{id}/power` + `/actuator/health`
+    - `shared/status-badge/`: reusable status badge (good/warning/serious/
+      critical/muted) using the dataviz skill's fixed status palette
+    - `dashboard/stat-tile/`, `dashboard/summary-panel/`: stat-tile row for
+      the inventory summary + a health badge, auto-refreshing every 15s via
+      RxJS (`timer` + `switchMap`, cleaned up with `takeUntilDestroyed`)
+    - `dashboard/hosts-table/`, `dashboard/vms-table/` (with a power-on/off
+      toggle button calling the power endpoint), `dashboard/datastores-table/`
+      (with a capacity usage bar using the dataviz sequential blue hue)
+    - `app.component`: header + summary panel + a 3-tab inventory section
+      (Hosts/VMs/Datastores)
+    - `proxy.conf.json` wired into `angular.json`'s `serve` target so
+      `ng serve` proxies `/api` and `/actuator` to `localhost:8080`
+    - Global theme tokens (light/dark, `prefers-color-scheme` + `data-theme`
+      override) added to `src/styles.css` from the dataviz skill's reference
+      palette
+    - **Not yet done**: only one spec file exists so far
+      (`app.component.spec.ts`, using `HttpTestingController` — written but
+      **never run**). No tests for `platform-api.service`, `summary-panel`,
+      `hosts-table`, `vms-table`, `datastores-table`, `stat-tile`, or
+      `status-badge`. `npm test` / `npm run build` have not been run against
+      this code at all — there may be compile errors, template errors, or
+      runtime bugs not yet caught. No e2e smoke test. No Dockerfile/nginx
+      config for serving the built app, and it is not wired into
+      `docker-compose.yml`. No CI `frontend` job.
 
 - [ ] **Phase 6 — Hardening & Delivery**
   - End-to-end pass across every layer with the full combined test suite green
@@ -187,45 +237,52 @@ sized to fit one session.
 
 ## Resume Point
 
-**Next session starts here:** Phase 5 — Kubernetes & Frontend Dashboard.
+**Next session starts here:** finish Phase 5 (frontend verification +
+wiring), then do Phase 6.
 
-Build on `helm/` and `frontend/` (currently README placeholders):
+The Helm chart and the `platform-api` summary endpoint are done, tested, and
+committed (see Phase 5 above — chart tests pass, and it was actually
+deployed to a real local cluster). The Angular dashboard under `frontend/`
+is scaffolded and believed functionally complete (see Phase 5 above for the
+full list of what was built) but **has not been run or tested yet** — treat
+it as unverified. Start here, in order:
 
-- A Helm chart in `helm/` for `platform-api`: Deployment, Service, and a
-  values file exposing image/replica/resource/env configuration. Must pass
-  `helm lint` and `helm template` cleanly; consider a `helm unittest` or
-  `helm template` + assertion-based test for key rendered fields (image
-  tag, port, env vars). Equivalent plain kubectl manifests alongside it
-  (or generated via `helm template > manifests/`) so the chart's output is
-  inspectable without a cluster.
-- Validate the chart actually deploys: `kubectl` + `kind`/`minikube` is
-  available in this environment, or at minimum exercise it with `helm
-  template` output applied to a local cluster if one is cheap to spin up
-  (check what's available before assuming — Docker Desktop's Kubernetes or
-  `minikube` via the `gcr.io/k8s-minikube/kicbase` image already pulled
-  may already be usable)
-- An Angular dashboard in `frontend/` consuming `platform-api`: an
-  inventory table (hosts/VMs/datastores, pulling from `GET /api/v1/hosts`
-  etc.), a health/status view (`GET /actuator/health`), and a metrics
-  summary (could reuse the inventory-size gauges or call `/actuator/
-  prometheus` and parse, or better, have `platform-api` expose a small
-  summary REST endpoint purpose-built for the dashboard rather than
-  parsing Prometheus text format client-side — worth deciding early)
-- Component tests for the Angular dashboard (e.g. Jasmine/Karma or the
-  modern Angular testing setup) and at least a smoke-level e2e check
-  (could be Playwright, consistent with how screenshots are captured for
-  this README) asserting the dashboard renders real data from a running
-  `platform-api`
-- Wire the dashboard into `docker-compose.yml` (its own service/profile,
-  or folded into the existing default services) so `docker compose up`
-  can serve it end to end alongside `platform-api`
-- Update CI (`.github/workflows/ci.yml`) with a `frontend` job (npm
-  install/build/test) and, if feasible without excessive CI time, a
-  `helm lint`/`helm template` job
+1. `cd frontend && npm install` (already run once; re-run if `node_modules`
+   is missing) `&& npm run build` — fix any compile/template errors first.
+2. `npm test -- --watch=false --browsers=ChromeHeadless` (or whatever
+   headless launcher is available) — the existing `app.component.spec.ts`
+   has never been executed. Fix failures, then write the missing specs:
+   `platform-api.service.spec.ts` (HttpTestingController, one test per
+   method), `summary-panel.component.spec.ts` (loading/success/error
+   states for both the summary and health polls), `hosts-table`/
+   `vms-table`/`datastores-table` component specs (render seeded data;
+   `vms-table` additionally test the power-toggle button posts to
+   `/api/v1/vms/{id}/power` and updates the row), `stat-tile` and
+   `status-badge` specs (trivial render checks).
+3. `ng serve` against a running `platform-api` (`docker compose up
+   platform-api vcsim` or `mvn spring-boot:run`) and manually click through
+   all three tabs plus a power toggle to confirm it actually works end to
+   end — the proxy config (`frontend/proxy.conf.json`) should make `ng
+   serve` forward `/api` and `/actuator` to `localhost:8080` without CORS
+   issues, but this has not been exercised.
+4. Add at least a smoke-level e2e check (Playwright, consistent with how
+   screenshots are captured for this README) asserting the dashboard
+   renders real data from a running `platform-api`.
+5. Give the frontend a Dockerfile (build the Angular app, serve it via
+   nginx, reverse-proxy `/api` and `/actuator` to `platform-api:8080` so the
+   container doesn't need the dev proxy) and wire it into
+   `docker-compose.yml` as its own service so `docker compose up` serves it
+   end to end.
+6. Add a `frontend` CI job (npm install/build/test) to
+   `.github/workflows/ci.yml`.
+7. Update `frontend/README.md` (still a placeholder) once the above is
+   real.
 
-This is the last unimplemented functional phase — Phase 6 is hardening,
-final README/DAILY_REPORT, and the preview screenshot refresh. Budget
-Phase 5 time accordingly: get the Helm chart and dashboard both genuinely
-working and tested, since Phase 6 has no slack to build net-new features.
+Only once all of that is genuinely green should Phase 5's checkbox flip to
+done. Phase 6 (hardening, full combined test suite, final README with the
+Preview section refreshed to include dashboard screenshots, DAILY_REPORT.md,
+`STATUS: COMPLETE`) has no slack left to build net-new features — budget
+the next session's time accordingly, front-loading the frontend
+verification above.
 
 STATUS: IN_PROGRESS
