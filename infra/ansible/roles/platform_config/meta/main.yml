@@ -1,0 +1,9 @@
+---
+galaxy_info:
+  role_name: platform_config
+  description: Renders environment-specific platform-api and HybridPlatformSync config
+  author: Hybrid Platform Lab
+  license: MIT
+  min_ansible_version: "2.15"
+
+dependencies: []
