@@ -7,7 +7,9 @@ REST API validates every request against an approved catalog of templates and
 sizes, then hands provisioning off to a backend module per platform: a
 PowerCLI module for vSphere (the `New-LabVM` / `Get-VMInventoryReport` /
 `Invoke-SnapshotPolicy` cmdlets, driven through `pwsh`), and Terraform for
-Proxmox and Azure.
+Proxmox and Azure. Once a VM exists, an Ansible role and a PowerShell module
+apply the same configuration baseline to it (Linux or Windows Server
+respectively) so every environment starts from the same known state.
 
 **Nothing in this repository touches a real vSphere, Proxmox or Azure
 environment.** vSphere automation is exercised against [vcsim](https://github.com/vmware/govmomi/tree/main/vcsim),
@@ -66,6 +68,24 @@ vCenter/ESXi simulator. Requires `pwsh` and Docker:
 This starts a vcsim container in vCenter mode and one in standalone-ESXi
 mode, runs every `New-LabVM` / `Get-VMInventoryReport` / `Invoke-SnapshotPolicy`
 test against both, and tears the containers down afterwards.
+
+The Ansible `linux-baseline` role (`ansible/roles/linux-baseline`) is tested
+against a real, disposable Docker container. Requires Docker, `ansible-lint`
+and `ansible-playbook`:
+
+```bash
+./scripts/run-ansible-tests.sh
+```
+
+This lints the role, applies it twice to a throwaway container, asserts the
+second apply is a no-op (idempotence), and tears the container down.
+
+The `WindowsBaseline` PowerShell module (`windows/WindowsBaseline`) is unit
+tested with every Windows-only cmdlet mocked, so it runs here too:
+
+```bash
+pwsh -Command "Invoke-Pester -Path ./windows/Tests"
+```
 
 ## Preview
 
@@ -207,6 +227,28 @@ so nothing secret ever touches disk.
 | `HYBRID_LAB_AZURE_LOCATION` | yes | Azure region, e.g. `eastus`. |
 | `HYBRID_LAB_AZURE_SSH_PUBLIC_KEY` | yes | SSH public key installed on provisioned Linux VMs. |
 
+## Host baselines
+
+Once a VM is up, two independent tools bring it to a known configuration
+baseline - one per OS family. Neither is wired into the API; they're run
+against a provisioned VM as the next step in the lifecycle.
+
+**Linux** - `ansible/roles/linux-baseline` creates a local admin user,
+installs a small package set, hardens `sshd_config` (no root login, no
+password auth, idle-timeout and auth-tries limits), and installs and starts
+`node_exporter` for Prometheus scraping. Tested by actually applying it
+twice to a disposable Docker container and asserting the second run changes
+nothing - see [`ansible/README.md`](ansible/README.md).
+
+**Windows** - `windows/WindowsBaseline`'s `Invoke-WindowsBaseline` checks
+(and, with `-Remediate`, fixes) service state/startup type, installed
+Windows features, and enabled firewall profiles, with full `-WhatIf`/
+`-Confirm` support. Every Windows-only cmdlet it touches is wrapped behind a
+one-line private function so the orchestration logic is unit-testable with
+mocks on any OS; the real cmdlet calls are proven by this repository's CI on
+GitHub's `windows-latest` runner, since they can't run anywhere else here -
+see [`windows/README.md`](windows/README.md).
+
 ## Project layout
 
 ```
@@ -220,8 +262,15 @@ powercli/            HybridLab PowerCLI module (New-LabVM, Get-VMInventoryReport
 terraform/
   modules/             proxmox-vm, azure-vm - reusable module building blocks, each with its own terraform test suite
   environments/        dev/ (ungated) and validation/ (approval-gated) folders wiring the modules up with providers
+ansible/
+  roles/linux-baseline/ users, SSH hardening, packages, node_exporter
+  playbooks/            baseline.yml applies the role to the linux_hosts group
+windows/
+  WindowsBaseline/      Invoke-WindowsBaseline module (services, features, firewall)
+  Tests/                Pester suite, every Windows-only cmdlet mocked
 scripts/
-  run-pester-tests.sh  starts vcsim (vCenter + ESXi modes) and runs the Pester suite
+  run-pester-tests.sh   starts vcsim (vCenter + ESXi modes) and runs the PowerCLI Pester suite
+  run-ansible-tests.sh  lints and idempotence-checks linux-baseline against a Docker container
 docs/
   screenshots/       Preview images embedded above
 PROGRESS.md          Build plan and phase-by-phase history
@@ -232,10 +281,11 @@ DAILY_REPORT.md       Written once the project is complete
 
 The FastAPI self-service API (catalog validation, the environments CRUD
 surface, Prometheus metrics), the vSphere path (the `HybridLab` PowerCLI
-module plus a real backend that drives it through `pwsh`), and the
-Proxmox/Azure path (the `proxmox-vm`/`azure-vm` Terraform modules plus real
-backends that plan, never apply, against them) are built and tested.
-Ansible/PowerShell baselines and the CI pipeline are still to come. See
+module plus a real backend that drives it through `pwsh`), the Proxmox/Azure
+path (the `proxmox-vm`/`azure-vm` Terraform modules plus real backends that
+plan, never apply, against them), and the host baselines (the Ansible
+`linux-baseline` role and the `WindowsBaseline` PowerShell module) are built
+and tested. The CI pipeline and final docs are still to come. See
 `PROGRESS.md` for the full phase plan and exactly what's done.
 
 ## License
