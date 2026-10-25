@@ -1,0 +1,16 @@
+services:
+  vcsim:
+    image: vmware/vcsim
+    container_name: hpl-vcsim
+    command: ["-l", "0.0.0.0:8989"]
+    ports:
+      - "8989:8989"
+
+  platform-api:
+    build:
+      context: ./backend
+    container_name: hpl-platform-api
+    ports:
+      - "8080:8080"
+    depends_on:
+      - vcsim
