@@ -1,0 +1,20 @@
+.panel__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+}
+
+.panel__header h2 {
+  font-size: 1rem;
+  color: var(--text-secondary);
+  margin: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.tile-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+}

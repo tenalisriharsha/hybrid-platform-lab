@@ -1,0 +1,45 @@
+@if (vms) {
+  <table>
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th>Host</th>
+        <th>CPU</th>
+        <th>Memory</th>
+        <th>Power state</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      @for (vm of vms; track vm.id) {
+        <tr>
+          <td>{{ vm.name }}</td>
+          <td>{{ vm.hostId }}</td>
+          <td class="numeric">{{ vm.cpuCount }}</td>
+          <td class="numeric">{{ vm.memoryMb | number }} MB</td>
+          <td>
+            <app-status-badge [status]="powerBadge(vm.powerState).status" [label]="powerBadge(vm.powerState).label" />
+          </td>
+          <td>
+            <button
+              type="button"
+              [disabled]="pendingVmId === vm.id || vm.powerState === 'SUSPENDED'"
+              (click)="togglePower(vm)"
+            >
+              {{ vm.powerState === 'POWERED_ON' ? 'Power off' : 'Power on' }}
+            </button>
+          </td>
+        </tr>
+      }
+      @empty {
+        <tr>
+          <td colspan="6">No virtual machines in inventory.</td>
+        </tr>
+      }
+    </tbody>
+  </table>
+} @else if (error) {
+  <p class="panel__error">Could not load VMs from platform-api.</p>
+} @else {
+  <p class="panel__loading">Loading VMs…</p>
+}
