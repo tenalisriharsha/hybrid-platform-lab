@@ -3,6 +3,7 @@ package dev.hybridplatform.api.inventory;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import dev.hybridplatform.api.inventory.domain.Datastore;
 import dev.hybridplatform.api.inventory.domain.Host;
 import dev.hybridplatform.api.inventory.domain.PowerState;
 import dev.hybridplatform.api.inventory.domain.VirtualMachine;
@@ -91,5 +92,49 @@ class InventoryServiceTest {
         inventoryService.addHost(newHost);
 
         assertThat(inventoryService.getHost("host-3")).isEqualTo(newHost);
+    }
+
+    @Test
+    void syncReplacesSeedDataWithNewEstate() {
+        Datastore datastore = new Datastore("ds-synced", "synced-ds", 1024, 512);
+        Host host = new Host("host-synced", "synced-host", "synced-cluster", 8, 16384, List.of(datastore.id()));
+        VirtualMachine vm = new VirtualMachine(
+                "vm-synced", "synced-vm", host.id(), PowerState.POWERED_ON, 2, 4096);
+
+        SyncResult result = inventoryService.sync(List.of(host), List.of(vm), List.of(datastore));
+
+        assertThat(result.hostCount()).isEqualTo(1);
+        assertThat(result.vmCount()).isEqualTo(1);
+        assertThat(result.datastoreCount()).isEqualTo(1);
+        assertThat(result.syncedAt()).isNotNull();
+
+        assertThat(inventoryService.listHosts()).containsExactly(host);
+        assertThat(inventoryService.listVms()).containsExactly(vm);
+        assertThat(inventoryService.listDatastores()).containsExactly(datastore);
+        assertThatThrownBy(() -> inventoryService.getHost("host-1"))
+                .isInstanceOf(InventoryItemNotFoundException.class);
+    }
+
+    @Test
+    void syncRejectsVmReferencingUnknownHost() {
+        Host host = new Host("host-synced", "synced-host", "synced-cluster", 8, 16384, List.of());
+        VirtualMachine orphan = new VirtualMachine(
+                "vm-orphan", "orphan", "host-missing", PowerState.POWERED_ON, 2, 4096);
+
+        assertThatThrownBy(() -> inventoryService.sync(List.of(host), List.of(orphan), List.of()))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("host-missing");
+
+        assertThat(inventoryService.listHosts()).hasSize(2);
+    }
+
+    @Test
+    void syncWithEmptyEstateClearsInventory() {
+        SyncResult result = inventoryService.sync(List.of(), List.of(), List.of());
+
+        assertThat(result.hostCount()).isZero();
+        assertThat(inventoryService.listHosts()).isEmpty();
+        assertThat(inventoryService.listVms()).isEmpty();
+        assertThat(inventoryService.listDatastores()).isEmpty();
     }
 }

@@ -1,6 +1,7 @@
 package dev.hybridplatform.api.inventory.web;
 
 import dev.hybridplatform.api.inventory.InventoryService;
+import dev.hybridplatform.api.inventory.SyncResult;
 import dev.hybridplatform.api.inventory.domain.Datastore;
 import dev.hybridplatform.api.inventory.domain.Host;
 import dev.hybridplatform.api.inventory.domain.VirtualMachine;
@@ -55,5 +56,10 @@ public class InventoryController {
     @GetMapping("/datastores/{id}")
     public Datastore getDatastore(@PathVariable String id) {
         return inventoryService.getDatastore(id);
+    }
+
+    @PostMapping("/sync")
+    public SyncResult sync(@RequestBody SyncRequest request) {
+        return inventoryService.sync(request.hosts(), request.vms(), request.datastores());
     }
 }

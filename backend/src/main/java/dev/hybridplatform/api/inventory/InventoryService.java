@@ -4,10 +4,13 @@ import dev.hybridplatform.api.inventory.domain.Datastore;
 import dev.hybridplatform.api.inventory.domain.Host;
 import dev.hybridplatform.api.inventory.domain.PowerState;
 import dev.hybridplatform.api.inventory.domain.VirtualMachine;
+import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 
 /**
@@ -100,5 +103,30 @@ public class InventoryService {
         }
         vms.put(vm.id(), vm);
         return vm;
+    }
+
+    /**
+     * Atomically replaces the entire inventory with a freshly synced estate,
+     * e.g. from the PowerCLI module pulling live data out of vcsim. The
+     * sample data seeded at startup only ever serves as a fallback until the
+     * first sync call lands.
+     */
+    public SyncResult sync(List<Host> newHosts, List<VirtualMachine> newVms, List<Datastore> newDatastores) {
+        Set<String> hostIds = newHosts.stream().map(Host::id).collect(Collectors.toSet());
+        for (VirtualMachine vm : newVms) {
+            if (!hostIds.contains(vm.hostId())) {
+                throw new IllegalArgumentException(
+                        "Synced VM '" + vm.id() + "' references unknown host '" + vm.hostId() + "'");
+            }
+        }
+
+        datastores.clear();
+        newDatastores.forEach(datastore -> datastores.put(datastore.id(), datastore));
+        hosts.clear();
+        newHosts.forEach(host -> hosts.put(host.id(), host));
+        vms.clear();
+        newVms.forEach(vm -> vms.put(vm.id(), vm));
+
+        return new SyncResult(hosts.size(), vms.size(), datastores.size(), Instant.now());
     }
 }

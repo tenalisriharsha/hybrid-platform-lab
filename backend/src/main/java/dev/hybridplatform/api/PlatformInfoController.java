@@ -8,7 +8,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1")
 public class PlatformInfoController {
 
-    private static final PlatformInfo INFO = new PlatformInfo("platform-api", "1", "Hybrid Platform Lab control-plane API");
+    private static final PlatformInfo INFO = new PlatformInfo("platform-api", "2", "Hybrid Platform Lab control-plane API");
 
     @GetMapping("/info")
     public PlatformInfo info() {
