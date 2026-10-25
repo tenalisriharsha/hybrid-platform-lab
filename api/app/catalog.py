@@ -11,7 +11,7 @@ from typing import Literal
 
 Backend = Literal["vsphere", "proxmox", "azure"]
 
-TEMPLATES: dict[str, dict[str, str]] = {
+TEMPLATES: dict[str, dict[str, object]] = {
     "ubuntu-22.04-vsphere": {
         "backend": "vsphere",
         "os": "linux",
@@ -28,11 +28,20 @@ TEMPLATES: dict[str, dict[str, str]] = {
         "backend": "proxmox",
         "os": "linux",
         "description": "Ubuntu 22.04 LTS on Proxmox VE, via the proxmox-vm Terraform module.",
+        # VMID of the Proxmox template to clone - a placeholder a real deployment
+        # overrides (see HYBRID_LAB_PROXMOX_TEMPLATE_OVERRIDES).
+        "proxmox_template_vm_id": 9000,
     },
     "ubuntu-22.04-azure": {
         "backend": "azure",
         "os": "linux",
         "description": "Ubuntu 22.04 LTS on Azure, via the azure-vm Terraform module.",
+        "azure_image": {
+            "publisher": "Canonical",
+            "offer": "0001-com-ubuntu-server-jammy",
+            "sku": "22_04-lts-gen2",
+            "version": "latest",
+        },
     },
 }
 
