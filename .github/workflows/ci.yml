@@ -1,0 +1,147 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: ["**"]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  api:
+    name: API (pytest + ruff)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+
+      # The live vSphere backend test provisions a real VM against vcsim through
+      # the exact pwsh + HybridLab module path production uses, so it needs a
+      # genuine VMware.PowerCLI install, not a mock.
+      - name: Install VMware PowerCLI
+        shell: pwsh
+        run: |
+          Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
+          Install-Module -Name VMware.PowerCLI -Scope CurrentUser -Force -AllowClobber
+
+      - name: Install API dependencies
+        working-directory: api
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: ruff check
+        working-directory: api
+        run: ruff check .
+
+      - name: pytest
+        working-directory: api
+        run: pytest -v
+
+  pester-vcsim:
+    name: PowerCLI (Pester vs vcsim)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Pester and VMware PowerCLI
+        shell: pwsh
+        run: |
+          Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
+          Install-Module -Name Pester -MinimumVersion 5.5.0 -Scope CurrentUser -Force -SkipPublisherCheck
+          Install-Module -Name VMware.PowerCLI -Scope CurrentUser -Force -AllowClobber
+
+      # Starts vcsim in vCenter mode and standalone-ESXi mode as plain Docker
+      # containers (not GitHub's `services:` block - vcsim needs different CLI
+      # args per mode, which `services:` has no way to pass) and tears both down
+      # afterwards. See scripts/run-pester-tests.sh.
+      - name: Run Pester suite against vcsim (vCenter + ESXi modes)
+        run: ./scripts/run-pester-tests.sh
+
+  terraform:
+    name: Terraform (fmt/validate/test)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+
+      - name: terraform fmt check
+        run: terraform fmt -recursive -check -diff terraform
+
+      - name: terraform init + validate
+        run: |
+          set -euo pipefail
+          for dir in terraform/modules/proxmox-vm terraform/modules/azure-vm \
+                     terraform/environments/dev/proxmox terraform/environments/dev/azure \
+                     terraform/environments/validation/proxmox terraform/environments/validation/azure; do
+            echo "== $dir =="
+            terraform -chdir="$dir" init -backend=false -input=false
+            terraform -chdir="$dir" validate
+          done
+
+      # terraform test only needs the real provider's schema, downloaded by the
+      # init above - mock_provider means no real credentials or API calls.
+      - name: terraform test
+        run: |
+          set -euo pipefail
+          for dir in terraform/modules/proxmox-vm terraform/modules/azure-vm \
+                     terraform/environments/validation/proxmox terraform/environments/validation/azure; do
+            echo "== $dir =="
+            terraform -chdir="$dir" test
+          done
+
+  ansible:
+    name: Ansible (lint + idempotence)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Ansible tooling
+        run: pip install "ansible-core>=2.16,<2.19" "ansible-lint>=24.2"
+
+      - name: Run lint + idempotence check against a Docker container
+        run: ./scripts/run-ansible-tests.sh
+
+  windows-pester:
+    name: WindowsBaseline (Pester, windows-latest)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Pester
+        shell: pwsh
+        run: |
+          Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
+          Install-Module -Name Pester -MinimumVersion 5.5.0 -Scope CurrentUser -Force -SkipPublisherCheck
+
+      # Every Get-Service/Get-WindowsFeature/Get-NetFirewallProfile call in the
+      # module is mocked in these tests, but this job is still the only place in
+      # CI running on a real Windows host at all - it's what proves the wrapper
+      # functions in windows/WindowsBaseline/Private even load without error.
+      - name: Invoke-Pester
+        shell: pwsh
+        run: |
+          Import-Module Pester -MinimumVersion 5.5.0 -Force
+          $config = New-PesterConfiguration
+          $config.Run.Path = './windows/Tests'
+          $config.Run.Exit = $true
+          $config.Output.Verbosity = 'Detailed'
+          Invoke-Pester -Configuration $config
