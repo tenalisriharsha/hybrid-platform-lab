@@ -11,14 +11,18 @@ frontend/.angular/
 npm-debug.log*
 
 # Terraform
-infra/terraform/.terraform/
-infra/terraform/.terraform.lock.hcl
-infra/terraform/*.tfstate
-infra/terraform/*.tfstate.backup
-infra/terraform/*.tfplan
+infra/terraform/**/.terraform/
+infra/terraform/**/.terraform.lock.hcl
+infra/terraform/**/*.tfstate
+infra/terraform/**/*.tfstate.backup
+infra/terraform/**/*.tfplan
+infra/terraform/**/terraform.tfvars
 
 # PowerShell
 infra/powershell/*.log
+
+# Ansible (rendered config output, not source)
+infra/ansible/dist/
 
 # Python (screenshot tooling, if any)
 scripts/.venv/
