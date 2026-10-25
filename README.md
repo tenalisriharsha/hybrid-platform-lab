@@ -92,7 +92,9 @@ pwsh -Command "Invoke-Pester -Path ./windows/Tests"
 The interactive API docs (Swagger UI), a real create/list round trip against
 the running API, the test suite passing, lint passing, the live Prometheus
 metrics endpoint, the PowerCLI test suite running against vcsim, a real
-drift report, and the snapshot policy refusing a protected VM:
+drift report, the snapshot policy refusing a protected VM, a Terraform
+module's test suite, and the Ansible role's lint-and-idempotence check -
+every screenshot below is a real, captured run, not a mockup:
 
 | | |
 |---|---|
@@ -104,8 +106,15 @@ drift report, and the snapshot policy refusing a protected VM:
 | `ruff check .` with zero findings | `/metrics` serving live Prometheus counters and histograms |
 | ![Pester suite against vcsim](docs/screenshots/07-pester-suite-vcsim.png) | ![Inventory drift report](docs/screenshots/08-inventory-drift-report.png) |
 | The PowerCLI Pester suite - 35 tests - passing against vcsim in both vCenter and ESXi modes | `Get-VMInventoryReport` catching a missing VM, a power-state mismatch and an unexpected VM |
-| ![Invoke-SnapshotPolicy refusing a protected VM](docs/screenshots/09-snapshot-policy-protected-whatif.png) | |
-| `Invoke-SnapshotPolicy -WhatIf` previewing two snapshots and refusing a VM marked protected | |
+| ![Invoke-SnapshotPolicy refusing a protected VM](docs/screenshots/09-snapshot-policy-protected-whatif.png) | ![terraform test against the proxmox-vm module](docs/screenshots/10-terraform-test.png) |
+| `Invoke-SnapshotPolicy -WhatIf` previewing two snapshots and refusing a VM marked protected | `terraform test` against `modules/proxmox-vm`, driven entirely by `mock_provider` |
+| ![Ansible lint and idempotence check](docs/screenshots/11-ansible-lint-idempotence.png) | |
+| `ansible-lint` passing, then the `linux-baseline` role applied twice to a disposable container - the second run changes nothing | |
+
+Regenerate screenshots 10-11 with `scripts/capture/capture-screenshots.mjs`
+(`cd scripts/capture && npm install`, then run it from the repo root - it
+drives `terraform test` and `./scripts/run-ansible-tests.sh` for real and
+screenshots their actual output).
 
 ## How it works
 
@@ -272,12 +281,13 @@ windows/
 scripts/
   run-pester-tests.sh   starts vcsim (vCenter + ESXi modes) and runs the PowerCLI Pester suite
   run-ansible-tests.sh  lints and idempotence-checks linux-baseline against a Docker container
+  capture/              regenerates the terraform test / ansible-lint preview screenshots
 docs/
   screenshots/       Preview images embedded above
   modernization.md    Decision table: VMware vs. containers vs. Azure
 RUNBOOK.md           Operational procedures: failed provisioning, capacity, rollback, failed CI
 PROGRESS.md          Build plan and phase-by-phase history
-DAILY_REPORT.md       Written once the project is complete
+DAILY_REPORT.md       Project summary: what was built, test results, known limitations
 ```
 
 ## Operations
@@ -301,15 +311,16 @@ macOS).
 
 ## Status
 
-The FastAPI self-service API (catalog validation, the environments CRUD
-surface, Prometheus metrics), the vSphere path (the `HybridLab` PowerCLI
-module plus a real backend that drives it through `pwsh`), the Proxmox/Azure
-path (the `proxmox-vm`/`azure-vm` Terraform modules plus real backends that
-plan, never apply, against them), the host baselines (the Ansible
-`linux-baseline` role and the `WindowsBaseline` PowerShell module), and the
-CI pipeline and operational docs are built and tested. Preview captures of
-every component in action are the only thing left. See `PROGRESS.md` for the
-full phase plan and exactly what's done.
+Complete. The FastAPI self-service API (catalog validation, the
+environments CRUD surface, Prometheus metrics), the vSphere path (the
+`HybridLab` PowerCLI module plus a real backend that drives it through
+`pwsh`), the Proxmox/Azure path (the `proxmox-vm`/`azure-vm` Terraform
+modules plus real backends that plan, never apply, against them), the host
+baselines (the Ansible `linux-baseline` role and the `WindowsBaseline`
+PowerShell module), the CI pipeline, operational docs, and preview captures
+of every component in action are all built and tested. See `PROGRESS.md`
+for the full phase-by-phase build history and `DAILY_REPORT.md` for a
+summary of what was built, the test results, and known limitations.
 
 ## License
 
