@@ -2,7 +2,7 @@
   "name": "hybrid-platform-lab-capture",
   "private": true,
   "type": "module",
-  "description": "Generates docs/screenshots/10-11 from real terraform test / ansible script runs.",
+  "description": "Regenerates docs/screenshots by running the real API, tests, PowerCLI demos, terraform test and the Ansible script.",
   "dependencies": {
     "playwright": "^1.64.1"
   }
