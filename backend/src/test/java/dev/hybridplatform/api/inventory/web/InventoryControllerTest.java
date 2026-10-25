@@ -92,6 +92,19 @@ class InventoryControllerTest {
     }
 
     @Test
+    void summaryEndpointReturnsInventoryRollup() throws Exception {
+        mockMvc.perform(get("/api/v1/summary"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.hostCount").value(2))
+                .andExpect(jsonPath("$.vmCount").value(3))
+                .andExpect(jsonPath("$.datastoreCount").value(2))
+                .andExpect(jsonPath("$.vmsPoweredOn").value(2))
+                .andExpect(jsonPath("$.vmsPoweredOff").value(1))
+                .andExpect(jsonPath("$.totalDatastoreCapacityGb").value(6144))
+                .andExpect(jsonPath("$.totalDatastoreFreeGb").value(4300));
+    }
+
+    @Test
     void infoEndpointReturnsPlatformMetadata() throws Exception {
         mockMvc.perform(get("/api/v1/info"))
                 .andExpect(status().isOk())
