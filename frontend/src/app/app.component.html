@@ -1,0 +1,36 @@
+<header class="app-header">
+  <h1>{{ title }}</h1>
+  <p class="app-header__subtitle">Inventory and health for the simulated vSphere estate</p>
+</header>
+
+<main class="app-main">
+  <app-summary-panel />
+
+  <section class="inventory">
+    <nav class="tabs" role="tablist">
+      <button type="button" role="tab" [attr.aria-selected]="activeTab === 'hosts'" [class.tab--active]="activeTab === 'hosts'" (click)="selectTab('hosts')">
+        Hosts
+      </button>
+      <button type="button" role="tab" [attr.aria-selected]="activeTab === 'vms'" [class.tab--active]="activeTab === 'vms'" (click)="selectTab('vms')">
+        Virtual machines
+      </button>
+      <button type="button" role="tab" [attr.aria-selected]="activeTab === 'datastores'" [class.tab--active]="activeTab === 'datastores'" (click)="selectTab('datastores')">
+        Datastores
+      </button>
+    </nav>
+
+    <div class="tab-panel">
+      @switch (activeTab) {
+        @case ('hosts') {
+          <app-hosts-table />
+        }
+        @case ('vms') {
+          <app-vms-table />
+        }
+        @case ('datastores') {
+          <app-datastores-table />
+        }
+      }
+    </div>
+  </section>
+</main>

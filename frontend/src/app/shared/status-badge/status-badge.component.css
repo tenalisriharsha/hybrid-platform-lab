@@ -1,0 +1,38 @@
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  border: 1px solid var(--border-hairline);
+  color: var(--text-primary);
+}
+
+.badge__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex: none;
+}
+
+.badge--good .badge__dot {
+  background: var(--status-good);
+}
+
+.badge--warning .badge__dot {
+  background: var(--status-warning);
+}
+
+.badge--serious .badge__dot {
+  background: var(--status-serious);
+}
+
+.badge--critical .badge__dot {
+  background: var(--status-critical);
+}
+
+.badge--muted .badge__dot {
+  background: var(--status-muted);
+}
