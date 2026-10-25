@@ -1,0 +1,11 @@
+apiVersion: 1
+
+providers:
+  - name: platform
+    orgId: 1
+    folder: "Hybrid Platform Lab"
+    type: file
+    disableDeletion: true
+    updateIntervalSeconds: 30
+    options:
+      path: /etc/grafana/provisioning/dashboards/files

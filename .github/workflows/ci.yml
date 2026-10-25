@@ -69,3 +69,27 @@ jobs:
       - name: Run role tests
         working-directory: infra/ansible
         run: ./tests/run-tests.sh
+
+  observability:
+    name: Observability (config checks)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check Prometheus config
+        working-directory: observability
+        run: |
+          docker run --rm -v "$PWD/prometheus:/etc/prometheus:ro" --entrypoint promtool \
+            prom/prometheus check config /etc/prometheus/prometheus.yml
+
+      - name: Check Prometheus alert rules
+        working-directory: observability
+        run: |
+          docker run --rm -v "$PWD/prometheus:/etc/prometheus:ro" --entrypoint promtool \
+            prom/prometheus check rules /etc/prometheus/rules/platform-api.yml
+
+      - name: Check Alertmanager config
+        working-directory: observability
+        run: |
+          docker run --rm -v "$PWD/alertmanager:/etc/alertmanager:ro" --entrypoint amtool \
+            prom/alertmanager check-config /etc/alertmanager/alertmanager.yml
