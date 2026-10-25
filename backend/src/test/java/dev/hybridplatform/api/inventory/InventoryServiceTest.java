@@ -7,17 +7,20 @@ import dev.hybridplatform.api.inventory.domain.Datastore;
 import dev.hybridplatform.api.inventory.domain.Host;
 import dev.hybridplatform.api.inventory.domain.PowerState;
 import dev.hybridplatform.api.inventory.domain.VirtualMachine;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 class InventoryServiceTest {
 
+    private SimpleMeterRegistry meterRegistry;
     private InventoryService inventoryService;
 
     @BeforeEach
     void setUp() {
-        inventoryService = new InventoryService();
+        meterRegistry = new SimpleMeterRegistry();
+        inventoryService = new InventoryService(meterRegistry);
     }
 
     @Test
@@ -136,5 +139,26 @@ class InventoryServiceTest {
         assertThat(inventoryService.listHosts()).isEmpty();
         assertThat(inventoryService.listVms()).isEmpty();
         assertThat(inventoryService.listDatastores()).isEmpty();
+    }
+
+    @Test
+    void registersInventorySizeGauges() {
+        assertThat(meterRegistry.get("platform_inventory_hosts").gauge().value()).isEqualTo(2.0);
+        assertThat(meterRegistry.get("platform_inventory_vms").gauge().value()).isEqualTo(3.0);
+        assertThat(meterRegistry.get("platform_inventory_datastores").gauge().value()).isEqualTo(2.0);
+    }
+
+    @Test
+    void inventorySizeGaugesTrackSyncedEstate() {
+        Datastore datastore = new Datastore("ds-synced", "synced-ds", 1024, 512);
+        Host host = new Host("host-synced", "synced-host", "synced-cluster", 8, 16384, List.of(datastore.id()));
+        VirtualMachine vm = new VirtualMachine(
+                "vm-synced", "synced-vm", host.id(), PowerState.POWERED_ON, 2, 4096);
+
+        inventoryService.sync(List.of(host), List.of(vm), List.of(datastore));
+
+        assertThat(meterRegistry.get("platform_inventory_hosts").gauge().value()).isEqualTo(1.0);
+        assertThat(meterRegistry.get("platform_inventory_vms").gauge().value()).isEqualTo(1.0);
+        assertThat(meterRegistry.get("platform_inventory_datastores").gauge().value()).isEqualTo(1.0);
     }
 }
