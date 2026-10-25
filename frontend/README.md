@@ -1,27 +1,65 @@
-# Frontend
+# Dashboard — frontend
 
-This project was generated with [Angular CLI](https://github.com/angular/angular-cli) version 18.2.21.
+A standalone Angular app visualizing `platform-api`'s inventory and
+health: a summary panel (health badge + stat tiles for hosts/VMs/
+datastores/capacity, auto-refreshing every 15 seconds) and three
+inventory tabs — hosts, VMs (with a power-on/off toggle), and datastores
+(with capacity usage bars).
 
-## Development server
+```
+frontend/
+  src/app/
+    core/                 PlatformApiService + inventory models
+    shared/status-badge/  reusable good/warning/serious/critical/muted badge
+    dashboard/
+      summary-panel/      health badge + stat-tile row, polls every 15s
+      stat-tile/          single stat tile
+      hosts-table/        hosts list
+      vms-table/          VMs list + power toggle
+      datastores-table/   datastores list + usage bar
+  e2e/                    Playwright smoke suite
+  proxy.conf.json         dev-server proxy for /api and /actuator
+  nginx.conf              reverse proxy used by the production Docker image
+```
 
-Run `ng serve` for a dev server. Navigate to `http://localhost:4200/`. The application will automatically reload if you change any of the source files.
+## Development
 
-## Code scaffolding
+Requires Node 20+ and a running `platform-api` on `localhost:8080`
+(`cd ../backend && mvn spring-boot:run`, or `docker compose up platform-api
+vcsim` from the repo root).
 
-Run `ng generate component component-name` to generate a new component. You can also use `ng generate directive|pipe|service|class|guard|interface|enum|module`.
+```bash
+npm install
+npm start   # ng serve --proxy-config proxy.conf.json, http://localhost:4200
+```
 
-## Build
+## Testing
 
-Run `ng build` to build the project. The build artifacts will be stored in the `dist/` directory.
+```bash
+npm run build                                      # production build
+npm test -- --watch=false --browsers=ChromeHeadless  # 29 Karma/Jasmine specs
+```
 
-## Running unit tests
+With `platform-api` and `npm start` both running:
 
-Run `ng test` to execute the unit tests via [Karma](https://karma-runner.github.io).
+```bash
+npx playwright install chromium   # once
+npm run e2e
+```
 
-## Running end-to-end tests
+The Playwright suite in `e2e/` asserts the dashboard renders real
+inventory and health from `platform-api`, that each tab loads its data,
+and that the power toggle actually calls `POST /api/v1/vms/{id}/power`
+and updates the row.
 
-Run `ng e2e` to execute the end-to-end tests via a platform of your choice. To use this command, you need to first add a package that implements end-to-end testing capabilities.
+## Docker
 
-## Further help
+```bash
+docker build -t hybrid-platform-lab-frontend .
+docker run -p 4200:80 hybrid-platform-lab-frontend
+```
 
-To get more help on the Angular CLI use `ng help` or go check out the [Angular CLI Overview and Command Reference](https://angular.dev/tools/cli) page.
+Builds the app and serves it via nginx, reverse-proxying `/api` and
+`/actuator` to a `platform-api` host named `platform-api:8080` (see
+`nginx.conf`) — this is how the `frontend` service in the repo root's
+`docker-compose.yml` is wired.
