@@ -1,9 +1,0 @@
-# Copy to terraform.tfvars and fill in real values for a real vCenter/vcsim
-# endpoint. Never commit terraform.tfvars — only dummy, non-functional
-# placeholders belong in this checked-in .example file.
-
-vsphere_server   = "vcsim.hpl.lab"
-vsphere_user     = "administrator@vsphere.local"
-vsphere_password = "replace-with-a-real-secret"
-esxi_username    = "root"
-esxi_password    = "replace-with-a-real-secret"

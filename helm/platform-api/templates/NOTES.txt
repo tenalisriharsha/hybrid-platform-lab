@@ -1,7 +1,0 @@
-platform-api has been deployed.
-
-Forward the service locally to try it:
-
-  kubectl port-forward svc/{{ include "platform-api.fullname" . }} 8080:{{ .Values.service.port }}
-  curl localhost:8080/api/v1/summary
-  curl localhost:8080/actuator/health
