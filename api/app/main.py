@@ -31,7 +31,7 @@ def create_app(db_path: str | None = None) -> FastAPI:
         response = await call_next(request)
         duration = time.perf_counter() - start
         route = request.scope.get("route")
-        path_label = route.path if route is not None else request.url.path
+        path_label = route.path if route is not None else "unmatched"
         request.app.state.metrics.observe_request(
             method=request.method,
             path=path_label,
