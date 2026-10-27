@@ -30,3 +30,16 @@ def test_healthz(client: TestClient) -> None:
     response = client.get("/healthz")
     assert response.status_code == 200
     assert response.json() == {"status": "ok"}
+
+
+def test_unmatched_paths_collapse_to_a_single_label(client: TestClient) -> None:
+    client.get("/this/does/not/exist")
+    client.get("/another/random/path/12345")
+    client.get("/yet-another-unique-path-abcxyz")
+
+    response = client.get("/metrics")
+    assert response.text.count('path="unmatched"') > 0
+    assert "/this/does/not/exist" not in response.text
+    assert "/another/random/path/12345" not in response.text
+    assert "/yet-another-unique-path-abcxyz" not in response.text
+    assert 'http_requests_total{method="GET",path="unmatched",status_code="404"} 3.0' in response.text
