@@ -46,9 +46,10 @@ class EnvironmentStore:
         return environment
 
     def get(self, environment_id: str) -> Environment | None:
-        row = self._conn.execute(
-            "SELECT payload FROM environments WHERE id = ?", (environment_id,)
-        ).fetchone()
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT payload FROM environments WHERE id = ?", (environment_id,)
+            ).fetchone()
         if row is None:
             return None
         return Environment.model_validate_json(row[0])
@@ -75,7 +76,8 @@ class EnvironmentStore:
         elif not include_deleted:
             query += " AND status != ?"
             params.append(EnvironmentStatus.DELETED.value)
-        rows = self._conn.execute(query, params).fetchall()
+        with self._lock:
+            rows = self._conn.execute(query, params).fetchall()
         return [Environment.model_validate_json(row[0]) for row in rows]
 
     def update(self, environment: Environment) -> Environment:
