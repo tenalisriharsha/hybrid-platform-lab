@@ -75,9 +75,12 @@ class ProxmoxBackend(ProvisioningBackend):
             "PROXMOX_VE_INSECURE": config["insecure"],
         }
 
-        stdout = terraform_utils.plan(
-            terraform_utils.environment_dir("proxmox"), tfvars_path, env
-        )
+        try:
+            stdout = terraform_utils.plan(
+                terraform_utils.environment_dir("proxmox"), tfvars_path, env
+            )
+        finally:
+            tfvars_path.unlink()
         summary = terraform_utils.plan_summary(stdout)
 
         return ProvisionResult(

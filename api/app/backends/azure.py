@@ -72,7 +72,10 @@ class AzureBackend(ProvisioningBackend):
             "ARM_CLIENT_SECRET": config["HYBRID_LAB_AZURE_CLIENT_SECRET"],
         }
 
-        stdout = terraform_utils.plan(terraform_utils.environment_dir("azure"), tfvars_path, env)
+        try:
+            stdout = terraform_utils.plan(terraform_utils.environment_dir("azure"), tfvars_path, env)
+        finally:
+            tfvars_path.unlink()
         summary = terraform_utils.plan_summary(stdout)
 
         return ProvisionResult(
