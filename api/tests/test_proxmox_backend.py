@@ -117,6 +117,51 @@ def test_provision_propagates_plan_failure(clean_proxmox_env: pytest.MonkeyPatch
         )
 
 
+def test_provision_deletes_tfvars_file_on_success(clean_proxmox_env: pytest.MonkeyPatch) -> None:
+    _configure(clean_proxmox_env)
+
+    captured: dict[str, object] = {}
+
+    def fake_plan(env_dir: Path, tfvars_path: Path, env: dict[str, str]) -> str:
+        captured["tfvars_path"] = tfvars_path
+        assert tfvars_path.exists()
+        return "Plan: 1 to add, 0 to change, 0 to destroy."
+
+    clean_proxmox_env.setattr("app.backends.proxmox.terraform_utils.plan", fake_plan)
+
+    backend = ProxmoxBackend()
+    backend.provision(
+        name="dev-1", template="ubuntu-22.04-proxmox", size="small", owner="a@example.com",
+        expiry=datetime.now(UTC),
+    )
+
+    tfvars_path = captured["tfvars_path"]
+    assert not tfvars_path.exists(), f"leaked tfvars file: {tfvars_path}"
+
+
+def test_provision_deletes_tfvars_file_on_plan_failure(clean_proxmox_env: pytest.MonkeyPatch) -> None:
+    _configure(clean_proxmox_env)
+
+    captured: dict[str, object] = {}
+
+    def fake_plan(env_dir: Path, tfvars_path: Path, env: dict[str, str]) -> str:
+        captured["tfvars_path"] = tfvars_path
+        assert tfvars_path.exists()
+        raise ProvisioningError("terraform plan failed: connection refused")
+
+    clean_proxmox_env.setattr("app.backends.proxmox.terraform_utils.plan", fake_plan)
+
+    backend = ProxmoxBackend()
+    with pytest.raises(ProvisioningError, match="connection refused"):
+        backend.provision(
+            name="dev-1", template="ubuntu-22.04-proxmox", size="small", owner="a@example.com",
+            expiry=datetime.now(UTC),
+        )
+
+    tfvars_path = captured["tfvars_path"]
+    assert not tfvars_path.exists(), f"leaked tfvars file: {tfvars_path}"
+
+
 def test_deprovision_is_a_noop(clean_proxmox_env: pytest.MonkeyPatch) -> None:
     def fail_plan(*args: object, **kwargs: object) -> str:
         raise AssertionError("deprovision should never call terraform plan")
