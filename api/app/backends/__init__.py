@@ -46,18 +46,19 @@ def _azure_backend() -> ProvisioningBackend:
     return SimulatedBackend("azure")
 
 
-_BACKENDS: dict[str, ProvisioningBackend] = {
-    "vsphere": _vsphere_backend(),
-    "proxmox": _proxmox_backend(),
-    "azure": _azure_backend(),
+_BACKEND_FACTORIES = {
+    "vsphere": _vsphere_backend,
+    "proxmox": _proxmox_backend,
+    "azure": _azure_backend,
 }
 
 
 def get_backend(name: str) -> ProvisioningBackend:
     try:
-        return _BACKENDS[name]
+        factory = _BACKEND_FACTORIES[name]
     except KeyError as exc:
         raise ProvisioningError(f"no backend registered for {name!r}") from exc
+    return factory()
 
 
 __all__ = ["ProvisioningBackend", "ProvisioningError", "get_backend"]
