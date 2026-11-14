@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, Request, status
+from fastapi import APIRouter, HTTPException, Query, Request, status
 
 from app.backends import ProvisioningError, get_backend
 from app.catalog import SIZES, TEMPLATES
@@ -48,7 +48,7 @@ def list_environments(
     http_request: Request,
     owner: str | None = None,
     backend: str | None = None,
-    status_filter: str | None = None,
+    status_filter: str | None = Query(default=None, alias="status"),
     include_deleted: bool = False,
 ) -> list[Environment]:
     store = http_request.app.state.store

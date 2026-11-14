@@ -107,6 +107,17 @@ def test_list_environments_filters_by_backend(client: TestClient, valid_payload:
     assert body[0]["backend"] == "azure"
 
 
+def test_list_environments_filters_by_status(client: TestClient, valid_payload: dict) -> None:
+    created = client.post("/environments", json=valid_payload).json()
+    client.delete(f"/environments/{created['id']}")
+
+    response = client.get("/environments", params={"status": "deleted"})
+    body = response.json()
+    assert len(body) == 1
+    assert body[0]["id"] == created["id"]
+    assert body[0]["status"] == "deleted"
+
+
 def test_delete_environment_marks_deleted_and_excludes_from_default_list(
     client: TestClient, valid_payload: dict
 ) -> None:
