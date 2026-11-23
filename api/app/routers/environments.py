@@ -1,10 +1,22 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException, Query, Request, status
+from pydantic import TypeAdapter, ValidationError
+from pydantic.networks import EmailStr
 
 from app.backends import ProvisioningError, get_backend
 from app.catalog import SIZES, TEMPLATES
 from app.models import Environment, EnvironmentCreateRequest, EnvironmentStatus
+
+_email_adapter = TypeAdapter(EmailStr)
+
+
+def _normalize_owner(owner: str) -> str:
+    try:
+        return _email_adapter.validate_python(owner)
+    except ValidationError:
+        return owner
+
 
 router = APIRouter(tags=["environments"])
 
@@ -52,7 +64,10 @@ def list_environments(
     include_deleted: bool = False,
 ) -> list[Environment]:
     store = http_request.app.state.store
-    return store.list(owner=owner, backend=backend, status=status_filter, include_deleted=include_deleted)
+    normalized_owner = _normalize_owner(owner) if owner is not None else None
+    return store.list(
+        owner=normalized_owner, backend=backend, status=status_filter, include_deleted=include_deleted
+    )
 
 
 @router.get("/environments/{environment_id}")
