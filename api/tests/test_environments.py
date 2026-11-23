@@ -96,6 +96,17 @@ def test_list_environments_filters_by_owner(client: TestClient, valid_payload: d
     assert [env["name"] for env in response.json()] == ["dev-box-2"]
 
 
+def test_list_environments_filters_by_owner_using_exact_string_posted(
+    client: TestClient, valid_payload: dict
+) -> None:
+    valid_payload["owner"] = "Alice@Example.com"
+    created = client.post("/environments", json=valid_payload).json()
+    assert created["owner"] == "Alice@example.com"
+
+    response = client.get("/environments", params={"owner": "Alice@Example.com"})
+    assert [env["name"] for env in response.json()] == [valid_payload["name"]]
+
+
 def test_list_environments_filters_by_backend(client: TestClient, valid_payload: dict) -> None:
     client.post("/environments", json=valid_payload)
     azure_env = dict(valid_payload, name="dev-box-3", template="ubuntu-22.04-azure")
